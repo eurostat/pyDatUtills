@@ -7,11 +7,9 @@ Module implementing miscellaneous decorators.
 
 **Dependencies**
 
-*require*:       
+*require*:      :mod:`functools`, :mod:`inspect`, :mod:`types`
 
 *optional*:     :mod:`wrapt`  
-
-*call*:                  
 
 **Contents**
 """
@@ -24,7 +22,7 @@ Module implementing miscellaneous decorators.
 from functools import wraps
 from warnings import warn
 from types import ClassType
-from inspect import getmro
+from inspect import getmro, isclass
 
 try:
     assert False
@@ -43,6 +41,89 @@ else:
     
     
 #%% Core functions/classes
+
+#==============================================================================
+# Function metaclass_maker
+#==============================================================================
+
+def metaclass_maker(left_metas=(), right_metas=()):
+    """Deal with metaclass conflict, i.e. when "the metaclass of a derived class 
+    must be a (non-strict) subclass of the metaclasses of all its bases"
+        
+        >>> metaclass = metaclass_maker(left_metas=(), right_metas=())
+        
+    Arguments:
+    left_metas,right_metas : class
+        classes (not strings) representing the metaclasses to 'merge'; note that
+        :Data:`left_metas` has priority over :data:`right_metas`\ .
+        
+    Note
+    ----
+    The simplest case where a metatype conflict happens is the following. 
+    Consider a class :class:`A` with metaclass :class:`M_A` and a class :class:`B` 
+    with an independent metaclass :class:`M_B`; suppose we derive :class:`C` from 
+    :class:`A` and :class:`B`. 
+    The question is: what is the metaclass of :class:`C` ? Is it :class:`M_A` or
+    :class:`M_B` ?    
+    The correct answer is :class:`M_C`, where :class:`M_C` is a metaclass that 
+    inherits from :class:`M_A` and :class:`M_B`, as in the following graph:
+
+    .. digraph:: metaclass_conflict
+    
+       "M_A" -> "A"
+       "M_B" -> "B"
+       "A" -> "C"
+       "B" -> "C"
+       "M_A" -> "M_C"
+       "M_B" -> "M_C"
+       "M_C" -> "C"
+    """
+    def skip_redundant(iterable, skipset=None):
+        # redundant items are repeated items or items in the original skipset
+        if skipset is None: skipset = set()
+        for item in iterable:
+            if item not in skipset:
+                skipset.add(item)
+                yield item    
+    def remove_redundant(metaclasses):
+        skipset = set([ClassType])
+        for meta in metaclasses: # determines the metaclasses to be skipped
+            skipset.update(getmro(meta)[1:])
+        return tuple(skip_redundant(metaclasses, skipset))    
+        # now the core of the function: two mutually recursive functions ##
+    memoized_metaclasses_map = {}    
+    def get_noconflict_metaclass(bases, left_metas, right_metas):
+         # make tuple of needed metaclasses in specified priority order
+         metas = left_metas + tuple(map(type, bases)) + right_metas
+         needed_metas = remove_redundant(metas)
+         # return existing confict-solving meta, if any
+         if needed_metas in memoized_metaclasses_map:
+           return memoized_metaclasses_map[needed_metas]
+         # nope: compute, memoize and return needed conflict-solving meta
+         elif not needed_metas:         # wee, a trivial case, happy us
+             meta = type
+         elif len(needed_metas) == 1: # another trivial case
+            meta = needed_metas[0]
+         # check for recursion, can happen i.e. for Zope ExtensionClasses
+         elif needed_metas == bases: 
+             raise TypeError("Incompatible root metatypes", needed_metas)
+         else: # gotta work ...
+             metaname = '_' + ''.join([m.__name__ for m in needed_metas])
+             meta = classmaker()(metaname, needed_metas, {})
+         memoized_metaclasses_map[needed_metas] = meta
+         return meta         
+    def classmaker(left_metas=(), right_metas=()):
+        class make_class(type):
+            def __new__(meta, name, bases, attrs):
+                metaclass = get_noconflict_metaclass(bases, left_metas, right_metas)
+                return metaclass(name, bases, attrs)
+            #def make_class(name, bases, adict):
+            #    metaclass = get_noconflict_metaclass(bases, left_metas, right_metas)
+            #    return metaclass(name, bases, adict)
+        make_class.__name__ = '__metaclass__'
+        return make_class    
+    return classmaker(left_metas, right_metas)
+
 
 #==============================================================================
 # Function class_decorator
@@ -211,110 +292,6 @@ def class_decorator(decorator, *attr_names, **kwargs):
         
 
 #==============================================================================
-# Class MetaclassProxy
-#==============================================================================
-
-class MetaclassProxy(type):
-    """Decorate the class being created & preserve :literal:`__metaclass__` of the 
-    parent.
-    
-    Algorithm
-    ---------
-    It executes two callbacks: before and after creation of a class, that allows to
-    decorate them.
-
-    Between two callbacks, it tries to locate any :literal:`__metaclass__` in the 
-    parents (sorted in MRO). 
-    
-    If found — with the help of :literal:`__new__` method - it mutates to the found
-    base :literal:`__metaclass__`. 
-    If not found, it just instantiates the given class.
-    """
-    # see http://stackoverflow.com/questions/4651729/metaclass-mixin-or-chaining
-
-    #/************************************************************************/
-    @classmethod
-    def pre_new(meta, name, bases, attrs):
-        """Decorate a class before creation."""
-        return (name, bases, attrs)
-
-    #/************************************************************************/
-    @classmethod
-    def post_new(meta, newclass):
-        """Decorate a class after creation."""
-        return newclass
-
-    #/************************************************************************/
-    @classmethod
-    def _mrobases(meta, bases):
-        """Expand tuple of base-classes ``bases`` in MRO."""
-        mrobases = []
-        for base in bases:
-            if base is not None: # We don't like `None` :)
-                mrobases.extend(base.mro())
-        return mrobases
-
-    #/************************************************************************/
-    @classmethod
-    def _find_parent_metaclass(meta, mrobases):
-        """Find any __metaclass__ callable in ``mrobases``."""
-        for base in mrobases:
-            if hasattr(base, '__metaclass__'):
-                metacls = base.__metaclass__
-                if metacls and not issubclass(metacls, meta): # don't call self again
-                    return metacls#(name, bases, attrs)
-        # Not found: use `type`
-        return lambda name,bases,attrs: type.__new__(type, name, bases, attrs)
-
-    #/************************************************************************/
-    def __new__(meta, name, bases, attrs):
-        mrobases = meta._mrobases(bases)
-        name, bases, attrs = meta.pre_new(name, bases, attrs) # Decorate, pre-creation
-        newclass = meta._find_parent_metaclass(mrobases)(name, bases, attrs)
-        return meta.post_new(newclass) # Decorate, post-creation
-
-        
-#==============================================================================
-# Function metaclass_decorator
-#==============================================================================
-
-def metaclass_decorator(method_decorator, *func_names):
-    """Metaclass decorator used to automatically decorate the `metaclass` attribute 
-    of a class. 
-
-        >>> new_cls = metaclass_decorator(method_decorator, *func_names)(cls)
-
-    Note
-    ----
-    Note that when the class :data:`cls` is inherited from another one, say :data:`super_cls`, 
-    all methods :data:`cls` that are inherited from :data:`super_cls` (and not overriden or
-    specific to the class) are decorated in the new class :data:`new_cls`.
-    
-    See http://python-3-patterns-idioms-test.readthedocs.org/en/latest/Metaprogramming.html
-    """
-
-    #decorator = method_decorator(func_decorator, *func_names)
-    def class_rebuilder(cls): 
-        #class __metaclass__(type):
-        #    def __init__(cls, name, bases, nmspc):
-        #        type.__init__(cls, name, bases, nmspc)
-        class new_cls(cls):
-            __metaclass__ = MetaclassProxy # Inheritor 
-        try:    
-            new_cls.__metaclass__ = class_decorator(method_decorator, *func_names)(new_cls.__metaclass__)
-        except:
-            raise IOError("%s metaclass not decorated" % cls.__name__)
-        try:    
-            new_cls.__module__ = cls.__module__ 
-        except: pass
-        try:    
-            new_cls.__name__ = cls.__name__ # __metaclass__
-        except: pass
-        return new_cls         
-    return class_rebuilder
-  
-
-#==============================================================================
 # Class MethodDecorator
 #==============================================================================
 
@@ -440,88 +417,123 @@ def method_decorator(func_decorator=None, *func_names, **func_exclude):
     return method_rebuilder
 
 
+  
 #==============================================================================
-# Function metaclass_maker
+# Function generic_decorator
 #==============================================================================
 
-def metaclass_maker(left_metas=(), right_metas=()):
-    """Deal with metaclass conflict, i.e. when "the metaclass of a derived class 
-    must be a (non-strict) subclass of the metaclasses of all its bases"
+def generic_decorator(*args, **kwargs):
+    def decorator(obj):
+        if isclass(obj):
+            return class_decorator(*args, **kwargs) (obj)                      
+        else:
+            return method_decorator(*args, **kwargs) (obj)                      
+    return decorator
+
+
+#==============================================================================
+# Class MetaclassProxy
+#==============================================================================
+
+class MetaclassProxy(type):
+    """Decorate the class being created & preserve :literal:`__metaclass__` of the 
+    parent.
+    
+    Algorithm
+    ---------
+    It executes two callbacks: before and after creation of a class, that allows to
+    decorate them.
+
+    Between two callbacks, it tries to locate any :literal:`__metaclass__` in the 
+    parents (sorted in MRO). 
+    
+    If found — with the help of :literal:`__new__` method - it mutates to the found
+    base :literal:`__metaclass__`. 
+    If not found, it just instantiates the given class.
+    """
+    # see http://stackoverflow.com/questions/4651729/metaclass-mixin-or-chaining
+
+    #/************************************************************************/
+    @classmethod
+    def pre_new(meta, name, bases, attrs):
+        """Decorate a class before creation."""
+        return (name, bases, attrs)
+
+    #/************************************************************************/
+    @classmethod
+    def post_new(meta, newclass):
+        """Decorate a class after creation."""
+        return newclass
+
+    #/************************************************************************/
+    @classmethod
+    def _mrobases(meta, bases):
+        """Expand tuple of base-classes ``bases`` in MRO."""
+        mrobases = []
+        for base in bases:
+            if base is not None: # We don't like `None` :)
+                mrobases.extend(base.mro())
+        return mrobases
+
+    #/************************************************************************/
+    @classmethod
+    def _find_parent_metaclass(meta, mrobases):
+        """Find any __metaclass__ callable in ``mrobases``."""
+        for base in mrobases:
+            if hasattr(base, '__metaclass__'):
+                metacls = base.__metaclass__
+                if metacls and not issubclass(metacls, meta): # don't call self again
+                    return metacls#(name, bases, attrs)
+        # Not found: use `type`
+        return lambda name,bases,attrs: type.__new__(type, name, bases, attrs)
+
+    #/************************************************************************/
+    def __new__(meta, name, bases, attrs):
+        mrobases = meta._mrobases(bases)
+        name, bases, attrs = meta.pre_new(name, bases, attrs) # Decorate, pre-creation
+        newclass = meta._find_parent_metaclass(mrobases)(name, bases, attrs)
+        return meta.post_new(newclass) # Decorate, post-creation
+
         
-        >>> metaclass = metaclass_maker(left_metas=(), right_metas=())
-        
-    Arguments:
-    left_metas,right_metas : class
-        classes (not strings) representing the metaclasses to 'merge'; note that
-        :Data:`left_metas` has priority over :data:`right_metas`\ .
-        
+#==============================================================================
+# Function metaclass_decorator
+#==============================================================================
+
+def metaclass_decorator(method_decorator, *func_names):
+    """Metaclass decorator used to automatically decorate the `metaclass` attribute 
+    of a class. 
+
+        >>> new_cls = metaclass_decorator(method_decorator, *func_names)(cls)
+
     Note
     ----
-    The simplest case where a metatype conflict happens is the following. 
-    Consider a class :class:`A` with metaclass :class:`M_A` and a class :class:`B` 
-    with an independent metaclass :class:`M_B`; suppose we derive :class:`C` from 
-    :class:`A` and :class:`B`. 
-    The question is: what is the metaclass of :class:`C` ? Is it :class:`M_A` or
-    :class:`M_B` ?    
-    The correct answer is :class:`M_C`, where :class:`M_C` is a metaclass that 
-    inherits from :class:`M_A` and :class:`M_B`, as in the following graph:
-
-    .. digraph:: metaclass_conflict
+    Note that when the class :data:`cls` is inherited from another one, say :data:`super_cls`, 
+    all methods :data:`cls` that are inherited from :data:`super_cls` (and not overriden or
+    specific to the class) are decorated in the new class :data:`new_cls`.
     
-       "M_A" -> "A"
-       "M_B" -> "B"
-       "A" -> "C"
-       "B" -> "C"
-       "M_A" -> "M_C"
-       "M_B" -> "M_C"
-       "M_C" -> "C"
+    See http://python-3-patterns-idioms-test.readthedocs.org/en/latest/Metaprogramming.html
     """
-    def skip_redundant(iterable, skipset=None):
-        # redundant items are repeated items or items in the original skipset
-        if skipset is None: skipset = set()
-        for item in iterable:
-            if item not in skipset:
-                skipset.add(item)
-                yield item    
-    def remove_redundant(metaclasses):
-        skipset = set([ClassType])
-        for meta in metaclasses: # determines the metaclasses to be skipped
-            skipset.update(getmro(meta)[1:])
-        return tuple(skip_redundant(metaclasses, skipset))    
-        # now the core of the function: two mutually recursive functions ##
-    memoized_metaclasses_map = {}    
-    def get_noconflict_metaclass(bases, left_metas, right_metas):
-         # make tuple of needed metaclasses in specified priority order
-         metas = left_metas + tuple(map(type, bases)) + right_metas
-         needed_metas = remove_redundant(metas)
-         # return existing confict-solving meta, if any
-         if needed_metas in memoized_metaclasses_map:
-           return memoized_metaclasses_map[needed_metas]
-         # nope: compute, memoize and return needed conflict-solving meta
-         elif not needed_metas:         # wee, a trivial case, happy us
-             meta = type
-         elif len(needed_metas) == 1: # another trivial case
-            meta = needed_metas[0]
-         # check for recursion, can happen i.e. for Zope ExtensionClasses
-         elif needed_metas == bases: 
-             raise TypeError("Incompatible root metatypes", needed_metas)
-         else: # gotta work ...
-             metaname = '_' + ''.join([m.__name__ for m in needed_metas])
-             meta = classmaker()(metaname, needed_metas, {})
-         memoized_metaclasses_map[needed_metas] = meta
-         return meta         
-    def classmaker(left_metas=(), right_metas=()):
-        class make_class(type):
-            def __new__(meta, name, bases, attrs):
-                metaclass = get_noconflict_metaclass(bases, left_metas, right_metas)
-                return metaclass(name, bases, attrs)
-            #def make_class(name, bases, adict):
-            #    metaclass = get_noconflict_metaclass(bases, left_metas, right_metas)
-            #    return metaclass(name, bases, adict)
-        make_class.__name__ = '__metaclass__'
-        return make_class    
-    return classmaker(left_metas, right_metas)
 
+    #decorator = method_decorator(func_decorator, *func_names)
+    def class_rebuilder(cls): 
+        #class __metaclass__(type):
+        #    def __init__(cls, name, bases, nmspc):
+        #        type.__init__(cls, name, bases, nmspc)
+        class new_cls(cls):
+            __metaclass__ = MetaclassProxy # Inheritor 
+        try:    
+            new_cls.__metaclass__ = class_decorator(method_decorator, *func_names)(new_cls.__metaclass__)
+        except:
+            raise IOError("%s metaclass not decorated" % cls.__name__)
+        try:    
+            new_cls.__module__ = cls.__module__ 
+        except: pass
+        try:    
+            new_cls.__name__ = cls.__name__ # __metaclass__
+        except: pass
+        return new_cls         
+    return class_rebuilder
+  
 
 #==============================================================================
 # Class Conditioning
