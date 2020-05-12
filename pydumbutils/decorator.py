@@ -427,10 +427,7 @@ class MethodDecorator():
             #     'property' if isinstance(self.func, property) else
             #     'function'
             #     )
-        if obj is None:
-            return object.__getattribute__(self, '__class__')(
-                self.func.__get__(None, cls), None, cls, method_type)
-        if method_type=='property':
+        if method_type=='property' and obj is not None:
             return self.func.__get__(obj, cls)
         else:
             return object.__getattribute__(self, '__class__')(
@@ -569,10 +566,7 @@ def method_decorator(func_decorator=None, *methods, **kwargs):
                     if self.obj == obj and self.cls == cls:
                         return self
                     method_type = self.method_type = self.method_type or self.func.__class__.__name__
-                    if obj is None:
-                        return object.__getattribute__(self, '__class__')(
-                            self.func.__get__(None, cls), None, cls, method_type)
-                    if method_type=='property':
+                    if method_type=='property' and obj is not None:
                         return func_decorator(self.func.__get__)(obj, cls)
                     else:
                         return object.__getattribute__(self, '__class__')(
