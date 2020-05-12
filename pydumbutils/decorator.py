@@ -681,24 +681,52 @@ class MetaclassProxy(type):
     --------
     :meth:`metaclass_decorator`, :meth:`class_decorator`.
     """
-    # see http://stackoverflow.com/questions/4651729/metaclass-mixin-or-chaining
+
+    #/************************************************************************/
+    def __new__(meta, name, bases, attrs):
+        # see http://stackoverflow.com/questions/4651729/metaclass-mixin-or-chaining
+        mrobases = meta._mrobases(bases)
+        name, bases, attrs = meta.pre_new(name, bases, attrs) # Decorate, pre-creation
+        newclass = meta._find_parent_metaclass(mrobases)(name, bases, attrs)
+        return meta.post_new(newclass) # Decorate, post-creation
 
     #/************************************************************************/
     @classmethod
     def pre_new(meta, name, bases, attrs):
-        """Decorate a class before creation."""
+        """Decorate a class before creation.
+
+            >>> name, bases, attrs = MetaclassProxy.pre_new(meta, name, bases, attrs)
+
+        Returns
+        -------
+        Inputs :data:`name`, :data:`bases`, and :data:`attrs` are output.
+        """
         return (name, bases, attrs)
 
     #/************************************************************************/
     @classmethod
     def post_new(meta, newclass):
-        """Decorate a class after creation."""
+        """Decorate a class after creation.
+
+            >>> newclass = MetaclassProxy.post_new(meta, newclass)
+
+        Returns
+        -------
+        Input :data:`newclass` is output.
+        """
         return newclass
 
     #/************************************************************************/
     @classmethod
     def _mrobases(meta, bases):
-        """Expand tuple of base-classes ``bases`` in MRO."""
+        """Expand tuple of base-classes `bases` in MRO.
+
+            >>> mrobases = MetaclassProxy._mrobases(meta, bases)
+
+        Returns
+        -------
+        All MROs of base classes listed in :data:`bases`.
+        """
         mrobases = []
         for base in bases:
             if base is not None: # We don't like `None` :)
@@ -708,21 +736,21 @@ class MetaclassProxy(type):
     #/************************************************************************/
     @classmethod
     def _find_parent_metaclass(meta, mrobases):
-        """Find any __metaclass__ callable in ``mrobases``."""
+        """Find any __metaclass__ callable in ``mrobases``.
+
+            >>> fun = MetaclassProxy._find_parent_metaclass(meta, mrobases)
+
+        Returns
+        -------
+        A metaclass constructor.
+        """
         for base in mrobases:
             if hasattr(base, '__metaclass__'):
                 metacls = base.__metaclass__
                 if metacls and not issubclass(metacls, meta): # don't call self again
                     return metacls#(name, bases, attrs)
         # Not found: use `type`
-        return lambda name,bases,attrs: type.__new__(type, name, bases, attrs)
-
-    #/************************************************************************/
-    def __new__(meta, name, bases, attrs):
-        mrobases = meta._mrobases(bases)
-        name, bases, attrs = meta.pre_new(name, bases, attrs) # Decorate, pre-creation
-        newclass = meta._find_parent_metaclass(mrobases)(name, bases, attrs)
-        return meta.post_new(newclass) # Decorate, post-creation
+        return lambda name, bases, attrs: type.__new__(type, name, bases, attrs)
 
 
 #==============================================================================
@@ -743,12 +771,10 @@ def metaclass_decorator(method_decorator, *methods):
 
     See also
     --------
-    :class:`MetaclassProxy`, :meth:`class_decorator`.
+    :class:`MetaclassProxy`, :meth:`method_decorator`, :meth:`class_decorator`.
     """
-
     # see http://python-3-patterns-idioms-test.readthedocs.org/en/latest/Metaprogramming.html
-
-    #decorator = method_decorator(func_decorator, *func_names)
+    #decorator = method_decorator(method_decorator, *methods)
     def _class_rebuilder(_cls):
         #class __metaclass__(type):
         #    def __init__(cls, name, bases, nmspc):
@@ -793,7 +819,13 @@ class ActivationDecorator():
         """Boolean inhibitor rule. When set to :literal:`True`, any decorator
         decorated with :class:`ActivationDecorator.Inhibitor` will be inhibited.
 
-            >>> ActivationDecorator.inhibitor_rule()
+            >>> status = inhibitor_rule()
+
+        Returns
+        -------
+        A boolean flag providing with the state (:literal:`False`: activated or
+        :literal:`True`: deactivated) of all decorators further decorated with
+        the default :class:`~Inhibitor`.
 
         Usage
         -----
@@ -816,7 +848,11 @@ class ActivationDecorator():
     def get_inhibitor(cls):
         """Returns the current (boolean) state of the inhibitor.
 
-            >>> status = ActivationDecorator.get_inhibitor()
+            >>> status = get_inhibitor()
+
+        Returns
+        -------
+        Nothing else than :meth:`~inhibitor_rule`.
         """
         return cls.inhibitor_rule()
 
@@ -825,7 +861,14 @@ class ActivationDecorator():
     def set_inhibitor(cls, flag):
         """Set the (boolean) state of the inhibitor.
 
-            >>> ActivationDecorator.set_inhibitor(status)
+            >>> set_inhibitor(status)
+
+        Argument
+        --------
+        state : bool
+            Flag used to (re)set the state of all decorators further decorated
+            with the default :class:`~Inhibitor`: literal:`False`: for activated
+            or :literal:`True`: for deactivated (no decoration).
         """
         try:
             assert isinstance(flag, bool)
@@ -846,7 +889,21 @@ class ActivationDecorator():
     class Inhibitor():
         """Method decorator that can dynamically inhibits a decorator at runtime.
 
-            >>> MethInhibit = ActivationDecorator.Inhibitor(decorator, ignore=inhibitor_rule)
+            >>> new_decorator_method = Inhibitor(decorator_method, ignore=inhibitor_rule)
+
+        Arguments
+        ---------
+        decorator_method : callable
+            A method decorator.
+        ignore : callable
+            A callable method returning the state as a boolean flag:: literal:`False`:
+            for activated or :literal:`True`: for deactivated (no decoration).
+
+        Returns
+        -------
+        new_decorator_method : callable
+            Same as the input :data:`decorator_method`, but can in addition be
+            deactivated at runtime.
 
         Examples
         --------
@@ -854,7 +911,7 @@ class ActivationDecorator():
         the inhibitor:
 
             >>> increment = lambda x: x+1
-            >>> @ActivationDecorator.Inhibitor
+            >>> @Inhibitor
             ... def decorator_increment(func):
             ...     def decorator(*args, **kwargs):
             ...         return increment(func(*args, **kwargs))
@@ -881,7 +938,7 @@ class ActivationDecorator():
         and deactivated, _i.e._ when the inhibitor is actually activated (set to
         :literal:`True`):
 
-            >>> ActivationDecorator.set_inhibitor(True) # deactivate
+            >>> set_inhibitor(True) # deactivate
             >>> a.increment_twice(1)
                 3
             >>> a.multiply_by_2(1) # decorated
@@ -935,8 +992,8 @@ class ActivationDecorator():
         """Build a conditional method decorator that can be inhibited
         at runtime.
 
-            >>> new_decorator_method = ActivationDecorator.inhibitorFactory(decorator_method)
-            >>> NewDecoratorClass = ActivationDecorator.inhibitorFactory(DecoratorClass)
+            >>> new_decorator_method = inhibitorFactory(decorator_method)
+            >>> NewDecoratorClass = inhibitorFactory(DecoratorClass)
 
         Usage
         -----
@@ -949,7 +1006,7 @@ class ActivationDecorator():
         but this time using :meth:`inhibitorFactory` to decorate the decorator:
 
             >>> increment = lambda x: x+1
-            >>> @ActivationDecorator.inhibitorFactory
+            >>> @inhibitorFactory
             ... def decorator_increment(func):
             ...     def decorator(*args, **kwargs):
             ...         return increment(func(*args, **kwargs))
@@ -977,13 +1034,13 @@ class ActivationDecorator():
 
         and test the decorated methods:
 
-            >>> ActivationDecorator.set_inhibitor(True) # deactivated
+            >>> set_inhibitor(True) # deactivated
             >>> a = A()
             >>> a.increment_twice(1)
                 3
             >>> a.multiply_by_2(1) # actually never decorated
                 2
-            >>> ActivationDecorator.set_inhibitor(False) # reactivate
+            >>> set_inhibitor(False) # reactivate
             >>> a.increment_twice(1)
                 4
             >>> a.multiply_by_2(1) # still inhibited/deactivated
@@ -994,7 +1051,7 @@ class ActivationDecorator():
         hence allowing different rules for different sets of decorators. We proceed
         with decorating "normally" some decorator(s):
 
-            >>> @class_decorator(ActivationDecorator.inhibitorFactory)
+            >>> @class_decorator(inhibitorFactory)
             ... class Dummy():
             ...     def decorator_increment(func):
             ...         def decorator(*args, **kwargs):
@@ -1022,7 +1079,7 @@ class ActivationDecorator():
 
             >>> b = B()
             >>> SOME_FLAG = False
-            >>> b.increment_twice(1) # activated through ActivationDecorator.set_inhibitor
+            >>> b.increment_twice(1) # activated through set_inhibitor
                 4
             >>> b.multiply_by_2(1) # activated through ignore_decorator
                 4
@@ -1031,7 +1088,7 @@ class ActivationDecorator():
                 4
             >>> b.multiply_by_2(1) # deactivated through ignore_decorator
                 2
-            >>> ActivationDecorator.set_inhibitor(True)
+            >>> set_inhibitor(True)
             >>> SOME_FLAG = False
             >>> b.increment_twice(1) # deactivated
                 3
@@ -1040,7 +1097,7 @@ class ActivationDecorator():
 
         See also
         ---------
-        :class:`~Inhibitor`\ .
+        :class:`~Inhibitor`.
         """
         def new_decorator(obj=None, **kwargs):
             # let's ensure that any derived class also uses its own ihibitor
@@ -1064,42 +1121,49 @@ class ActivationDecorator():
 class ConditioningDecorator()
     """Base class of function decorators that provide pre-/post-conditions for
     decorated methods.
+
+    Examples
+    --------
+    Let's just decorate some functions:
+
+        >>> def in_ge20(inval):
+        ...     assert inval >= 20
+        >>> def out_lt30(retval, inval):
+        ...     assert retval < 30
+        >>> @decorator_precondition(in_ge20)
+        ... @decorator_postcondition(out_lt30)
+        ... def apply_increment(x):
+        ...     return x+1
+
+    Here, :data:`decorator_precondition(in_ge20)` and :data:`Conditioning(in_ge20, None)`
+    are equivalent. Ibid for :data:`decorator_postcondition(out_lt30)` and
+    :data:`Conditioning(None, out_lt30)`. Actually, we could  simply write:
+
+        >>> @Conditioning(in_ge20, out_lt30)
+        ... def apply_increment_sim(x):
+        ...     return x+1
+
+    Then we simply run:
+
+        >>> print apply_increment(1)
+            Traceback (most recent call last):
+            ...
+            AssertionError
+        >>> print apply_increment(29)
+            Traceback (most recent call last):
+            ...
+            AssertionError
+        >>> print apply_increment(25)
+            26
+        >>> print apply_increment_sim(20)
+            21
     """
 
     #/************************************************************************/
     class Conditioning():
         """Class providing pre-/post-conditions as function decorators.
 
-        Examples
-        --------
-
-            >>> def in_ge20(inval):
-            ...     assert inval >= 20
-            >>> def out_lt30(retval, inval):
-            ...     assert retval < 30
-            >>> @decorator_precondition(in_ge20) # equivalent to: Conditioning(in_ge20, None)
-            ... @decorator_postcondition(out_lt30) # equivalent to: Conditioning(None, out_lt30)
-            ... def apply_increment(x):
-            ...     return x+1
-
-            >>> @Conditioning(in_ge20, out_lt30)
-            ... def apply_increment_sim(x):
-            ...     return x+1
-
-        and simply run:
-
-            >>> print apply_increment(1)
-                Traceback (most recent call last):
-                ...
-                AssertionError
-            >>> print apply_increment(29)
-                Traceback (most recent call last):
-                ...
-                AssertionError
-            >>> print apply_increment(25)
-                26
-            >>> print apply_increment_sim(20)
-                21
+            >>> decorator = Conditioning(precondition, poscondition)
 
         See also
         --------
