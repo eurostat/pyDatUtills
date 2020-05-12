@@ -3,7 +3,8 @@
 """
 .. _decorator
 
-Module implementing miscellaneous decorators.
+Module implementing miscellaneous decorators for methods and classes that can
+also be activated at runtime.
 
 **Dependencies**
 
@@ -151,8 +152,8 @@ def class_decorator(func_decorator, *members, **kwargs):
         list of methods or classes to further exclude from the list of decorated
         ones in the new class :data:`new_cls`\ . it defaults to all "magic" objects
         or attributes that live in user-controlled namespaces (_i.e._ those starting
-        with underscores ____). Any member in :literal:`exclude_members is added
-        to this list.
+        and ending with underscores \_\_). Any member in :literal:`exclude_member`
+        is added to this list.
     special_member : str[list]
         list of special methods or classes to include; this can be used to override
         all the members excluded by default in :literal:`exclude_member`.
@@ -160,7 +161,8 @@ def class_decorator(func_decorator, *members, **kwargs):
         variable conveying the name of a parent (base) class of the input decorated
         class :data:`cls` whose attributes will be further decorated; set to
         :literal:`True` to select all parent base classes (_i.e._ all those in
-        :data:`cls.__bases__`) and :literal:`False` when the parent class should be ignored.
+        :data:`cls.__bases__`) and :literal:`False` when the parent class should
+        be ignored.
 
     Returns
     -------
@@ -174,6 +176,8 @@ def class_decorator(func_decorator, *members, **kwargs):
     Let's create a method decorator that increments the output of a function on integer:
 
         >>> increment = lambda x: x+1
+        >>> increment(1)
+            2
         >>> def decorator_increment(func):
         ...     def decorator(*args, **kwargs):
         ...         return increment(func(*args, **kwargs))
@@ -186,6 +190,11 @@ def class_decorator(func_decorator, *members, **kwargs):
         ...          return increment(increment(x))
         ...     def multiply_by_2(self, x):
         ...          return 2*x
+        >>> a = A()
+        >>> a.increment_twice(1)
+            3
+        >>> a.multiply_by_2(1)
+            2
 
     Let's implement different inherited classes using the class decorator:
 
@@ -198,15 +207,11 @@ def class_decorator(func_decorator, *members, **kwargs):
 
     and test it :
 
-        >>> a = A(); b = B(); c = C()
-        >>> a.increment_twice(1)
-            3
+        >>> b = B(); c = C()
         >>> b.increment_twice(1) # decorated with one more call to increment
             4
         >>> c.increment_twice(1) # not decorated
             3
-        >>> a.multiply_by_2(1)
-            2
         >>> b.multiply_by_2(1)
             3
         >>> c.multiply_by_2(1) # also decorated
@@ -222,6 +227,17 @@ def class_decorator(func_decorator, *members, **kwargs):
         ...         return increment(self.x)
         >>> increment_once(1)()
             3
+
+    Note in cases like the one above (callable classes, _i.e._ classes with a
+    :meth:`__call__` method), it is necessary to add the :meth:`__call__` to the
+    list of "special members" (see also note below).
+
+    Note
+    ----
+    When decorating a magic method of a class (_i.e._ a class starting with \_\_
+    and also ending with \_\_), the name of the method needs to be parsed as a
+    special member, _i.e._ an item of the :literal:`special_member` keyword list
+    argument.
 
     See also
     --------
@@ -270,10 +286,12 @@ def class_decorator(func_decorator, *members, **kwargs):
     # prepare/redefine the decorating method
     ## _new_decorator = method_decorator(func_decorator, *func_names, **func_exclude)
     def _new_decorator(decorated, name):
+        # we use method_wrapper = functools.wraps (or a variant of it) to preserve
+        # doc and name...
         try:
-            return func_decorator(decorated, name)
+            return method_wrapper(decorated)(func_decorator(decorated, name))
         except TypeError:
-            return func_decorator(decorated)
+            return method_wrapper(decorated)(func_decorator(decorated))
     def _optional_decorator(decorated, name):
         if (members in ((), [], (None,), None) or name in members or name in special_members)   \
                 and name not in exclude_members:
@@ -376,15 +394,19 @@ class MethodDecorator():
     """
 
     #/************************************************************************/
-    def __init__(self, func, obj=None, cls=None, method_type='function',
-                 **kwargs):
+    def __init__(self, func, obj=None, cls=None, method_type=None, **kwargs):
         try:
-            assert callable(func)
+            # assert func.__class__ in ('function', 'method', 'property'))
+            assert isinstance(func, (staticmethod, classmethod, property)) or callable(func)
         except AssertionError:
             raise TypeError("Wrong type for decorated object - must be a callable (function/method)")
         # these defaults are OK for plain functions  and will be changed by
         # __get__() for methods once a method is dot-referenced
-        self.func, self.obj, self.cls, self.method_type = func, obj, cls, method_type
+        self.func, self.obj, self.cls = func, obj, cls
+        try:
+            self.method_type = method_type or self.method_type
+        except:
+            self.method_type = method_type
 
     #/************************************************************************/
     def __repr__(self):  # special case: __repr__ ignores __getattribute__
@@ -395,21 +417,24 @@ class MethodDecorator():
     #    # support instance methods
     #    return functools.partial(self.__call__, obj)
     def __get__(self, obj=None, cls=None):
-        # it is executed when decorated func is referenced as a method: cls.func
-        # or obj.func
         if self.obj == obj and self.cls == cls:
             return self
-        if self.method_type=='property':
+        method_type = self.method_type =    \
+            self.method_type or self.func.__class__.__name__
+            # self.method_type or (
+            #     'staticmethod' if isinstance(self.func, staticmethod) else
+            #     'classmethod' if isinstance(self.func, classmethod) else
+            #     'property' if isinstance(self.func, property) else
+            #     'function'
+            #     )
+        if obj is None:
+            return object.__getattribute__(self, '__class__')(
+                self.func.__get__(None, cls), None, cls, method_type)
+        if method_type=='property':
             return self.func.__get__(obj, cls)
-        method_type = ( # note that we added 'property'
-            'staticmethod' if isinstance(self.func, staticmethod) else
-            'classmethod' if isinstance(self.func, classmethod) else
-            'property' if isinstance(self.func, property) else
-            'instancemethod'
-            )
-        return object.__getattribute__(self, '__class__')(
-            # use bound or unbound method with this underlying func
-            self.func.__get__(obj, cls), obj, cls, method_type)
+        else:
+            return object.__getattribute__(self, '__class__')(
+                self.func.__get__(obj, cls), obj, cls, method_type)
 
     #/************************************************************************/
     def __getattribute__(self, attr_name):
@@ -450,6 +475,56 @@ def method_decorator(func_decorator=None, *methods, **kwargs):
         ... def decorated_function():
         ...     # original function
 
+    Examples
+    --------
+    We use the following "increment" decorator (see also :meth:`class_decorator`):
+
+        >>> increment = lambda x: x+1
+        >>> def decorator_increment(func):
+        ...     def decorator(*args, **kwargs):
+        ...         return increment(func(*args, **kwargs))
+        ...     return decorator
+
+    and use it to decorate different types of methods (static methods, class methods
+    or even properties):
+
+        >>> class A:
+        ...     _value = 10
+        ...
+        ...     @method_decorator(decorator_increment)
+        ...     @staticmethod
+        ...     def increment_twice(x):
+        ...         return increment(increment(x))
+        ...
+        ...     @method_decorator(decorator_increment)
+        ...     @classmethod
+        ...     def multiply_by_2(cls, x):
+        ...         return 2*x
+        ...
+        ...     @method_decorator(decorator_increment)
+        ...     @property
+        ...     def value(self):
+        ...         return self._value
+
+    Indeed:
+
+        >>> a = A()
+        >>> a.increment_twice(1)
+            4
+        >>> a.multiply_by_2(1)
+            3
+        >>> a.value
+            11
+
+    while the attributes of the decorated methods are unchanged, for instance:
+
+        >>> A.increment_twice.__class__
+            function
+        >>> A.multiply_by_2.__class__
+            method
+        >>> A.value.__class__
+            property
+
     Note
     ----
     Likewise :meth:`NewDecorator`, the new implemented class knows the class the
@@ -488,25 +563,35 @@ def method_decorator(func_decorator=None, *methods, **kwargs):
         #    else:
         #        return func
         # the following method_rebuilder is invoked at run time (through __call__)
-        class method_rebuilder(MethodDecorator):
-            def __init__(self, func, obj=None, cls=None, method_type='function'):
-                MethodDecorator.__init__(self, func, obj=obj, cls=cls, method_type=method_type)
-                setattr(self,'__doc__',object.__getattribute__(func_decorator(self.func), '__doc__'))
-            def __call__(self, *args, **kwargs):
-                if (methods in ((), [], (None,), None) or self.func in methods) and self.func not in exclude_methods:
-                    return func_decorator(self.func)(*args, **kwargs)
-                else:
-                    return self.func(*args, **kwargs)
-            def __getattribute__(self, attr_name):
-                if attr_name in ('__init__','__get__', '__call__', '__getattribute__','__doc__','func', 'obj', 'cls', 'method_type'):
-                    return object.__getattribute__(self, attr_name) # ibid
-                return getattr(self.func, attr_name)
+        def method_rebuilder(method, *args, **kwargs):
+            class _Rebuilder(MethodDecorator):
+                def __get__(self, obj=None, cls=None):
+                    if self.obj == obj and self.cls == cls:
+                        return self
+                    method_type = self.method_type = self.method_type or self.func.__class__.__name__
+                    if obj is None:
+                        return object.__getattribute__(self, '__class__')(
+                            self.func.__get__(None, cls), None, cls, method_type)
+                    if method_type=='property':
+                        return func_decorator(self.func.__get__)(obj, cls)
+                    else:
+                        return object.__getattribute__(self, '__class__')(
+                            self.func.__get__(obj, cls), obj, cls, method_type)
+                def __call__(self, *args, **kwargs):
+                    if (methods in ((), [], (None,), None) or self.func in methods) and self.func not in exclude_methods:
+                        return func_decorator(self.func)(*args, **kwargs)
+                    else:
+                        return self.func(*args, **kwargs)
+            try:
+                return method_wrapper(method)(_Rebuilder(method, *args, **kwargs))
+            except:
+                return _Rebuilder(method, *args, **kwargs)
     else:
         #@wrapt.decorator
-        #def method_rebuilder(wrapped, instance, args, kwargs):
+        #def _method_rebuilder(wrapped, instance, args, kwargs):
         #    return func_decorator(wrapped(*args, **kwargs))
-        method_rebuilder = func_decorator(method_wrapper)
-    return method_rebuilder
+        _method_rebuilder = func_decorator(method_wrapper)
+    return _method_rebuilder
 
 
 #==============================================================================
@@ -532,8 +617,8 @@ def generic_decorator(decorator, *args, **kwargs):
 
     Example
     -------
-
-    Let's consider the example already presented of :meth:`class_decorator`:
+    Let's consider the example already used for the decorators :meth:`class_decorator`
+    and :meth:`method_decorator`:
 
         >>> increment = lambda x: x+1
         >>> def decorator_increment(func):
@@ -541,7 +626,7 @@ def generic_decorator(decorator, *args, **kwargs):
         ...         return increment(func(*args, **kwargs))
         ...     return decorator
 
-    that we use to decorate a class with one method:
+    and use it again to decorate a class with one method:
 
         >>> @generic_decorator(decorator_increment, 'increment_twice')
         ... class A(object):
@@ -576,6 +661,119 @@ def generic_decorator(decorator, *args, **kwargs):
         else:
             return method_decorator(decorator, *args, **kwargs) (obj)
     return wrapper
+
+
+#==============================================================================
+# Class MetaclassProxy
+#==============================================================================
+
+class MetaclassProxy(type):
+    """Decorate the class being created & preserve :literal:`__metaclass__` of
+    the parent.
+
+    Note
+    ----
+    It executes two callbacks: before and after creation of a class, that allows
+    to decorate them.
+
+    Between two callbacks, it tries to locate any :literal:`__metaclass__` in the
+    parents (sorted in MRO).
+
+    If found (with the help of :literal:`__new__` method) it mutates to the found
+    base :literal:`__metaclass__`. If not found, it just instantiates the given
+    class.
+
+    See also
+    --------
+    :meth:`metaclass_decorator`, :meth:`class_decorator`.
+    """
+    # see http://stackoverflow.com/questions/4651729/metaclass-mixin-or-chaining
+
+    #/************************************************************************/
+    @classmethod
+    def pre_new(meta, name, bases, attrs):
+        """Decorate a class before creation."""
+        return (name, bases, attrs)
+
+    #/************************************************************************/
+    @classmethod
+    def post_new(meta, newclass):
+        """Decorate a class after creation."""
+        return newclass
+
+    #/************************************************************************/
+    @classmethod
+    def _mrobases(meta, bases):
+        """Expand tuple of base-classes ``bases`` in MRO."""
+        mrobases = []
+        for base in bases:
+            if base is not None: # We don't like `None` :)
+                mrobases.extend(base.mro())
+        return mrobases
+
+    #/************************************************************************/
+    @classmethod
+    def _find_parent_metaclass(meta, mrobases):
+        """Find any __metaclass__ callable in ``mrobases``."""
+        for base in mrobases:
+            if hasattr(base, '__metaclass__'):
+                metacls = base.__metaclass__
+                if metacls and not issubclass(metacls, meta): # don't call self again
+                    return metacls#(name, bases, attrs)
+        # Not found: use `type`
+        return lambda name,bases,attrs: type.__new__(type, name, bases, attrs)
+
+    #/************************************************************************/
+    def __new__(meta, name, bases, attrs):
+        mrobases = meta._mrobases(bases)
+        name, bases, attrs = meta.pre_new(name, bases, attrs) # Decorate, pre-creation
+        newclass = meta._find_parent_metaclass(mrobases)(name, bases, attrs)
+        return meta.post_new(newclass) # Decorate, post-creation
+
+
+#==============================================================================
+# Function metaclass_decorator
+#==============================================================================
+
+def metaclass_decorator(method_decorator, *methods):
+    """Metaclass decorator used to automatically decorate the `metaclass` attribute
+    of a class.
+
+        >>> new_cls = metaclass_decorator(method_decorator, *methods)(cls)
+
+    Note
+    ----
+    Note that when the class :data:`cls` is inherited from another one, say :data:`super_cls`,
+    all methods :data:`cls` that are inherited from :data:`super_cls` (and not overriden or
+    specific to the class) are decorated in the new class :data:`new_cls`.
+
+    See also
+    --------
+    :class:`MetaclassProxy`, :meth:`class_decorator`.
+    """
+
+    # see http://python-3-patterns-idioms-test.readthedocs.org/en/latest/Metaprogramming.html
+
+    #decorator = method_decorator(func_decorator, *func_names)
+    def _class_rebuilder(_cls):
+        #class __metaclass__(type):
+        #    def __init__(cls, name, bases, nmspc):
+        #        type.__init__(cls, name, bases, nmspc)
+        try:
+            metaclass = class_decorator(method_decorator, *methods)(MetaclassProxy)
+        except:
+            warn("Metaclass %s not decorated" % _cls.__name__)
+            metaclass = MetaclassProxy
+        class new_cls(with_metaclass(metaclass, _cls)):
+            pass
+        try:
+            new_cls.__module__ = _cls.__module__
+        except: pass
+        try:
+            new_cls.__name__ = _cls.__name__ # __metaclass__
+        except: pass
+        return new_cls
+    return _class_rebuilder
 
 
 #==============================================================================
@@ -866,120 +1064,7 @@ class ActivationDecorator():
 
 
 #==============================================================================
-# Class MetaclassProxy
-#==============================================================================
-
-class MetaclassProxy(type):
-    """Decorate the class being created & preserve :literal:`__metaclass__` of
-    the parent.
-
-    Note
-    ----
-    It executes two callbacks: before and after creation of a class, that allows
-    to decorate them.
-
-    Between two callbacks, it tries to locate any :literal:`__metaclass__` in the
-    parents (sorted in MRO).
-
-    If found (with the help of :literal:`__new__` method) it mutates to the found
-    base :literal:`__metaclass__`. If not found, it just instantiates the given
-    class.
-
-    See also
-    --------
-    :meth:`metaclass_decorator`, :meth:`class_decorator`.
-    """
-    # see http://stackoverflow.com/questions/4651729/metaclass-mixin-or-chaining
-
-    #/************************************************************************/
-    @classmethod
-    def pre_new(meta, name, bases, attrs):
-        """Decorate a class before creation."""
-        return (name, bases, attrs)
-
-    #/************************************************************************/
-    @classmethod
-    def post_new(meta, newclass):
-        """Decorate a class after creation."""
-        return newclass
-
-    #/************************************************************************/
-    @classmethod
-    def _mrobases(meta, bases):
-        """Expand tuple of base-classes ``bases`` in MRO."""
-        mrobases = []
-        for base in bases:
-            if base is not None: # We don't like `None` :)
-                mrobases.extend(base.mro())
-        return mrobases
-
-    #/************************************************************************/
-    @classmethod
-    def _find_parent_metaclass(meta, mrobases):
-        """Find any __metaclass__ callable in ``mrobases``."""
-        for base in mrobases:
-            if hasattr(base, '__metaclass__'):
-                metacls = base.__metaclass__
-                if metacls and not issubclass(metacls, meta): # don't call self again
-                    return metacls#(name, bases, attrs)
-        # Not found: use `type`
-        return lambda name,bases,attrs: type.__new__(type, name, bases, attrs)
-
-    #/************************************************************************/
-    def __new__(meta, name, bases, attrs):
-        mrobases = meta._mrobases(bases)
-        name, bases, attrs = meta.pre_new(name, bases, attrs) # Decorate, pre-creation
-        newclass = meta._find_parent_metaclass(mrobases)(name, bases, attrs)
-        return meta.post_new(newclass) # Decorate, post-creation
-
-
-#==============================================================================
-# Function metaclass_decorator
-#==============================================================================
-
-def metaclass_decorator(method_decorator, *methods):
-    """Metaclass decorator used to automatically decorate the `metaclass` attribute
-    of a class.
-
-        >>> new_cls = metaclass_decorator(method_decorator, *methods)(cls)
-
-    Note
-    ----
-    Note that when the class :data:`cls` is inherited from another one, say :data:`super_cls`,
-    all methods :data:`cls` that are inherited from :data:`super_cls` (and not overriden or
-    specific to the class) are decorated in the new class :data:`new_cls`.
-
-    See also
-    --------
-    :class:`MetaclassProxy`, :meth:`class_decorator`.
-    """
-
-    # see http://python-3-patterns-idioms-test.readthedocs.org/en/latest/Metaprogramming.html
-
-    #decorator = method_decorator(func_decorator, *func_names)
-    def _class_rebuilder(_cls):
-        #class __metaclass__(type):
-        #    def __init__(cls, name, bases, nmspc):
-        #        type.__init__(cls, name, bases, nmspc)
-        try:
-            metaclass = class_decorator(method_decorator, *methods)(MetaclassProxy)
-        except:
-            warn("Metaclass %s not decorated" % _cls.__name__)
-            metaclass = MetaclassProxy
-        class new_cls(with_metaclass(metaclass, _cls)):
-            pass
-        try:
-            new_cls.__module__ = _cls.__module__
-        except: pass
-        try:
-            new_cls.__name__ = _cls.__name__ # __metaclass__
-        except: pass
-        return new_cls
-    return _class_rebuilder
-
-
-#==============================================================================
-# Class Conditioning
+# Class ConditioningDecorator
 #==============================================================================
 
 class ConditioningDecorator()
@@ -1034,7 +1119,6 @@ class ConditioningDecorator()
             def __init__(self, precond, postcond, func):
                 self._precond, self._postcond  = precond, postcond
                 self._func = func
-
             def __call__(self, *args, **kwargs):
                 if self._precond:
                     self._precond(*args, **kwargs)
@@ -1046,15 +1130,12 @@ class ConditioningDecorator()
         def __init__(self, pre, post, use_conditions=True):
             if not use_conditions:
                pre, post = None, None
-
-            self._precondition  = pre
-            self._postcondition = post
+            self._precondition, self._postcondition  = pre, post
 
         def __call__(self, function):
             # combine recursive wrappers (@precondition + @postcondition == @conditions)
             pres  = set((self._precondition,))
             posts = set((self._postcondition,))
-
             # unwrap function, collect distinct pre-/post conditions
             while type(function) is self.wrapper:
                 pres.add(function._precond)
@@ -1065,7 +1146,6 @@ class ConditioningDecorator()
             # add a wrapper for each pair (note that 'conditions' may be empty)
             for pre, post in conditions:
                 function = self.wrapper(pre, post, function)
-
             return function
 
     #/************************************************************************/
@@ -1089,4 +1169,12 @@ class ConditioningDecorator()
         :class:`Conditioning`, :meth:`decorator_precondition`
         """
         return cls.Conditioning(None, postcondition, use_conditions)
+
+
+#==============================================================================
+# Class FilterDecorator
+#==============================================================================
+
+class FilterDecorator():
+    pass
 
