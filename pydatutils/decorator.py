@@ -797,10 +797,10 @@ def metaclass_decorator(method_decorator, *methods):
 
 
 #==============================================================================
-# Class ActivationDecorator
+# Class ActivDecorator
 #==============================================================================
 
-class ActivationDecorator():
+class ActivDecorator():
     """Class of activation decorators that can dynamically inhibit (deactivate)
     a decorator at runtime.
 
@@ -817,9 +817,9 @@ class ActivationDecorator():
     @classmethod
     def inhibitor_rule(cls):
         """Boolean inhibitor rule. When set to :literal:`True`, any decorator
-        decorated with :class:`ActivationDecorator.Inhibitor` will be inhibited.
+        decorated with :class:`~Inhibitor` will be inhibited.
 
-            >>> status = inhibitor_rule()
+            >>> status = ActivDecorator.inhibitor_rule()
 
         Returns
         -------
@@ -830,7 +830,7 @@ class ActivationDecorator():
         Usage
         -----
         This shall be parsed as the :data:`ignore` argument of an inhibitor
-        instance of the method decorator :class:`ActivationDecorator.Inhibitor`.
+        instance of the method decorator :class:`~Inhibitor`.
         """
         try:
             return getattr(cls, cls.INHIBITOR)
@@ -848,7 +848,7 @@ class ActivationDecorator():
     def get_inhibitor(cls):
         """Returns the current (boolean) state of the inhibitor.
 
-            >>> status = get_inhibitor()
+            >>> status = ActivDecorator.get_inhibitor()
 
         Returns
         -------
@@ -861,7 +861,7 @@ class ActivationDecorator():
     def set_inhibitor(cls, flag):
         """Set the (boolean) state of the inhibitor.
 
-            >>> set_inhibitor(status)
+            >>> ActivDecorator.set_inhibitor(status)
 
         Argument
         --------
@@ -889,7 +889,7 @@ class ActivationDecorator():
     class Inhibitor():
         """Method decorator that can dynamically inhibits a decorator at runtime.
 
-            >>> new_decorator_method = Inhibitor(decorator_method, ignore=inhibitor_rule)
+            >>> new_decorator_method = ActivDecorator.Inhibitor(decorator_method, ignore=inhibitor_rule)
 
         Arguments
         ---------
@@ -911,7 +911,7 @@ class ActivationDecorator():
         the inhibitor:
 
             >>> increment = lambda x: x+1
-            >>> @Inhibitor
+            >>> @ActivDecorator.Inhibitor
             ... def decorator_increment(func):
             ...     def decorator(*args, **kwargs):
             ...         return increment(func(*args, **kwargs))
@@ -938,7 +938,7 @@ class ActivationDecorator():
         and deactivated, _i.e._ when the inhibitor is actually activated (set to
         :literal:`True`):
 
-            >>> set_inhibitor(True) # deactivate
+            >>> ActivDecorator.set_inhibitor(True) # deactivate
             >>> a.increment_twice(1)
                 3
             >>> a.multiply_by_2(1) # decorated
@@ -957,7 +957,7 @@ class ActivationDecorator():
             except:
                 raise TypeError("Wrong type for DECORATOR - must be callable")
             self.decorator = decorator
-            ignore = kwargs.pop('ignore', ActivationDecorator.inhibitor_rule)
+            ignore = kwargs.pop('ignore', ActivDecorator.inhibitor_rule)
             try:
                 assert ignore is None or callable(ignore) or isinstance(ignore,bool)
             except:
@@ -1003,10 +1003,10 @@ class ActivationDecorator():
         Examples
         --------
         Let's consider the same decorator as for :class:`~Inhibitor` example,
-        but this time using :meth:`inhibitorFactory` to decorate the decorator:
+        but this time using :meth:`~inhibitorFactory` to decorate the decorator:
 
             >>> increment = lambda x: x+1
-            >>> @inhibitorFactory
+            >>> @ActivDecorator.inhibitorFactory
             ... def decorator_increment(func):
             ...     def decorator(*args, **kwargs):
             ...         return increment(func(*args, **kwargs))
@@ -1034,24 +1034,24 @@ class ActivationDecorator():
 
         and test the decorated methods:
 
-            >>> set_inhibitor(True) # deactivated
+            >>> ActivDecorator.set_inhibitor(True) # deactivated
             >>> a = A()
             >>> a.increment_twice(1)
                 3
             >>> a.multiply_by_2(1) # actually never decorated
                 2
-            >>> set_inhibitor(False) # reactivate
+            >>> ActivDecorator.set_inhibitor(False) # reactivate
             >>> a.increment_twice(1)
                 4
             >>> a.multiply_by_2(1) # still inhibited/deactivated
                 2
 
         With respect to the :class:`~Inhibitor` class, we can introduce an inhibitor
-        rule as a function which is not the default one (:meth:`inhibitor_rule`),
+        rule as a function which is not the default one (:meth:`~inhibitor_rule`),
         hence allowing different rules for different sets of decorators. We proceed
         with decorating "normally" some decorator(s):
 
-            >>> @class_decorator(inhibitorFactory)
+            >>> @class_decorator(ActivDecorator.inhibitorFactory)
             ... class Dummy():
             ...     def decorator_increment(func):
             ...         def decorator(*args, **kwargs):
@@ -1088,7 +1088,7 @@ class ActivationDecorator():
                 4
             >>> b.multiply_by_2(1) # deactivated through ignore_decorator
                 2
-            >>> set_inhibitor(True)
+            >>> ActivDecorator.set_inhibitor(True)
             >>> SOME_FLAG = False
             >>> b.increment_twice(1) # deactivated
                 3
@@ -1115,10 +1115,10 @@ class ActivationDecorator():
 
 
 #==============================================================================
-# Class ConditioningDecorator
+# Class CondDecorator
 #==============================================================================
 
-class ConditioningDecorator()
+class CondDecorator()
     """Base class of function decorators that provide pre-/post-conditions for
     decorated methods.
 
@@ -1130,16 +1130,16 @@ class ConditioningDecorator()
         ...     assert inval >= 20
         >>> def out_lt30(retval, inval):
         ...     assert retval < 30
-        >>> @decorator_precondition(in_ge20)
-        ... @decorator_postcondition(out_lt30)
+        >>> @CondDecorator.decorator_precondition(in_ge20)
+        ... @CondDecorator.decorator_postcondition(out_lt30)
         ... def apply_increment(x):
         ...     return x+1
 
-    Here, :data:`decorator_precondition(in_ge20)` and :data:`Conditioning(in_ge20, None)`
-    are equivalent. Ibid for :data:`decorator_postcondition(out_lt30)` and
-    :data:`Conditioning(None, out_lt30)`. Actually, we could  simply write:
+    Here, :data:`~decorator_precondition(in_ge20)` and :data:`~Conditioning(in_ge20, None)`
+    are equivalent. Ibid for :data:`~decorator_postcondition(out_lt30)` and
+    :data:`~Conditioning(None, out_lt30)`. Actually, we could  simply write:
 
-        >>> @Conditioning(in_ge20, out_lt30)
+        >>> @CondDecorator.Conditioning(in_ge20, out_lt30)
         ... def apply_increment_sim(x):
         ...     return x+1
 
@@ -1163,7 +1163,7 @@ class ConditioningDecorator()
     class Conditioning():
         """Class providing pre-/post-conditions as function decorators.
 
-            >>> decorator = Conditioning(precondition, poscondition)
+            >>> decorator = CondDecorator.Conditioning(precondition, poscondition)
 
         See also
         --------
