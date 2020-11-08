@@ -460,6 +460,33 @@ class MethodDecorator():
 
 
 #==============================================================================
+# Class CacheMethodDecorator
+#==============================================================================
+
+class CacheMethodDecorator(MethodDecorator):
+    """Decorator caching a function's return value each time it is called.
+    If called later with the same arguments, the cached value is returned
+    (not reevaluated).
+    """
+
+    #/************************************************************************/
+    def __init__(self, *args, **kwargs):
+        self.cache = {}
+        super(MemoDecorator, self).__init__(*args, **kwargs)
+
+    #/************************************************************************/
+    def __call__(self, *args, **kwargs):
+        key = str(args) + str(kwargs)
+        #key = args
+        #if not isinstance(args, collections.Hashable):
+        #    # uncacheable (a list, for instance): better to not cache than blow up.
+        #    return super(MemoDecorator, self).__call__(*args, **kwargs)
+        if not key in self.cache:
+            self.cache[key] = super(MemoDecorator, self).__call__(*args, **kwargs)
+        return self.cache[key]
+
+
+#==============================================================================
 # Function method_decorator
 #==============================================================================
 
@@ -1235,4 +1262,3 @@ class CondDecorator()
 
 class FilterDecorator():
     pass
-

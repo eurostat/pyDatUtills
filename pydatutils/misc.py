@@ -3,15 +3,14 @@
 """
 .. _misc
 
-Module implementing miscellaneous useful methods.
+Module implementing useful miscellaneous methods, including filesytem interactions
+and date/time objects handling.
 
 **Dependencies**
 
 *require*:      :mod:`datetime`, :mod:`time`, :mod:`calendar`, :mod:`uuid', ':mod:`hashlib`, :mod:`shutil`
 
-*optional*:     :mod:`dateutil`
-
-*call*:         :mod:``
+*optional*:     :mod:`dateutil`, :mod:`chardet`, :mod:`pytz`
 
 **Contents**
 """
@@ -62,8 +61,6 @@ except ImportError:
 
 from uuid import uuid3, uuid4, NAMESPACE_DNS
 
-ISWIN           = os.name=='nt' # sys.platform[0:3].lower()=='win'
-
 
 #%% Core functions/classes
 
@@ -74,6 +71,8 @@ ISWIN           = os.name=='nt' # sys.platform[0:3].lower()=='win'
 class SysEnv(object):
     """Static system methods.
     """
+
+    ISWIN = os.name=='nt' # sys.platform[0:3].lower()=='win'
 
     #/************************************************************************/
     @staticmethod
@@ -118,7 +117,7 @@ class SysEnv(object):
             try:        os.kill(pid, 0) #Sending a 0 signal does nothing.
             except:     return False
             else:       return True
-        elif ISWIN:
+        elif SysEnv.ISWIN:
             from win32process import EnumProcesses
             try:        return pid in EnumProcesses()
             except:     return False
@@ -148,7 +147,7 @@ class SysEnv(object):
             if not osp.exists(filepath):
                 raise IOError("Path not found: '%s'" % filepath)
             return filepath.strip()
-        if ISWIN: # Windows is case insensitive anyways
+        if SysEnv.ISWIN: # Windows is case insensitive anyways
             if as_path:             return osp.exists(filepath),filepath
             else:                   return osp.exists(filepath)
         path, name = osp.split(osp.abspath(filepath))
@@ -349,7 +348,7 @@ class SysEnv(object):
                 time.strftime(DateTime.dtformat(**kwargs), time.localtime(filestat.st_atime))
             fileinfo['uuid'] = SysEnv.uuid(filepath)
             #if sys.platform[0:3].lower()=='win':
-            if ISWIN:       ownerid, ownername = _winFileOwner(filepath)
+            if SysEnv.ISWIN:       ownerid, ownername = _winFileOwner(filepath)
             else:           ownerid, ownername = _ixFileOwner(filestat.st_uid)
             fileinfo['ownerid'] = ownerid
             fileinfo['ownername'] = ownername
@@ -424,7 +423,7 @@ class SysEnv(object):
         `osp.realpath/os.path.abspath` returns unexpected results on windows if `filepath[-1]==':'`
         """
         if hasattr(file,'__iter__'): # is iterable
-            if ISWIN: # global variable
+            if SysEnv.ISWIN: # global variable
                 realpath=[]
                 for f in file:
                     if f[-1] == ':': f += '\\'
@@ -432,7 +431,7 @@ class SysEnv(object):
             else:
                 return [osp.realpath(f) for f in file]
         else:
-            if ISWIN and file[-1] == ':':     file += '\\'
+            if SysEnv.ISWIN and file[-1] == ':':     file += '\\'
             return osp.realpath(file)
 
     #/************************************************************************/
@@ -1358,7 +1357,7 @@ class DateTime(object):
     def dtformat(**kwargs):
         """Determine a datetime format from date and time formats, and their combination.
 
-            >>> dt = dtformat(**kwargs)
+            >>> dt = DateTime.dtformat(**kwargs)
 
         Keyword Arguments
         -----------------
@@ -1385,10 +1384,10 @@ class DateTime(object):
 
     #/************************************************************************/
     @staticmethod
-    def timestamp(**kwargs):
+    def time_stamp(**kwargs):
         """Return a timestamp.
 
-            >>> dtnow = timestamp(**kwargs)
+            >>> dtnow = DateTime.time_stamp(**kwargs)
 
         Keyword Arguments
         -----------------

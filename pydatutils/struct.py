@@ -9,15 +9,15 @@ Module introducing various structure manipulations.
 
 *require*:      :mod:`numpy`, :mod:`pandas`, :mod:`datetime`
 
-*call*:         :mod:`pydumbutils.log`         
+*call*:         :mod:`pydumbutils.log`
 
 **Contents**
 """
 
-# *credits*:      `gjacopo <gjacopo@ec.europa.eu>`_ 
+# *credits*:      `gjacopo <gjacopo@ec.europa.eu>`_
 # *since*:        Fri May  8 15:56:40 2020
 
-#%% Settings            
+#%% Settings
 
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence
@@ -37,24 +37,24 @@ import datetime
 import numpy as np
 import pandas as pd
 
-from pydumbutils.log import deprecated
+from pydatutils.log import deprecated
 
 
 #%% Core functions/classes
-   
+
 #==============================================================================
 # Class Type
 #==============================================================================
 
-class Type():   
-    
+class Type():
+
     # Variables of useful types conversions
     __PYTYPES = {'object':'object', \
                  'int':'uint8', 'uint8':'uint8', 'uint16':'uint16', 'int16':'int16',    \
                  'long': 'uint32', 'uint32':'uint32', 'int32':'int32',                  \
                  'float':'float32', 'float32':'float32', 'float64':'float64'            \
                  }
-    
+
     # Python pack types names
     __PPTYPES = ['B', 'b', 'H', 'h', 'I', 'i', 'f', 'd'] # personal selection
     #=========   ==============  =================   =====================
@@ -72,18 +72,18 @@ class Type():
     #'l'         signed long     int                 4
     #'f'         float           float               4
     #'d'         double          float               8
-    #=========   ==============  =================   =====================    
+    #=========   ==============  =================   =====================
     #See http://www.python.org/doc//current/library/struct.html and
     #http://docs.python.org/2/library/array.html.
-    
+
     # NumPy types names
     __NPTYPES         = [np.dtype(n).name for n in __PPTYPES+['l','L','c']]
-    
+
     # Pandas types names
     __PDTYPES         = [np.dtype(n).name for n in ['b', 'i', 'f', 'O', 'S', 'U', 'V' ]]
-    #=========   ==============  
+    #=========   ==============
     #Type code   C Type
-    #=========   ==============  
+    #=========   ==============
     #'b'         boolean
     #'i'         (signed) integer
     #'u'         unsigned integer
@@ -98,34 +98,34 @@ class Type():
     __PPT2NPT = {n:np.dtype(n).name for n in __PPTYPES}
     # See http://docs.scipy.org/doc/numpy/reference/arrays.dtypes.html and
     # http://docs.scipy.org/doc/numpy/reference/arrays.scalars.html.
-    
+
     # Dictionary of Python -> Numpy
     __NPT2PYT = { np.dtype('b'):                bool,
                   np.dtype('i'):                bool,
                   np.dtype('O'):                str, # not object
                   np.dtype('U'):                str,
                   object:                       object,
-                  np.dtype('i'):                int, 
-                  np.dtype('uint32'):           int, 
-                  np.dtype(int):                int, 
-                  np.dtype('f'):                float, 
+                  np.dtype('i'):                int,
+                  np.dtype('uint32'):           int,
+                  np.dtype(int):                int,
+                  np.dtype('f'):                float,
                   np.dtype(float):              float,
                   np.dtype('datetime64'):       datetime.datetime,
                   np.dtype('datetime64[ns]'):   datetime.datetime
-                 } 
-  
+                 }
+
     # Dictionary of Python -> Numpy
     def __rev_dict_unique_values(d):
         dd = {}
-        [dd.setdefault(v, []).append(k) for (k,v) in d.items()]  
-        return dd 
-    __PYT2NPT = __rev_dict_unique_values(__NPT2PYT)        
+        [dd.setdefault(v, []).append(k) for (k,v) in d.items()]
+        return dd
+    __PYT2NPT = __rev_dict_unique_values(__NPT2PYT)
     #__PY2NPT = { bool:      [np.dtype('b'), np.dtype('i')],
-    #             str:        [np.dtype('O'), object], 
+    #             str:        [np.dtype('O'), object],
     #             int:        [np.dtype('i'), np.dtype('uint32'), np.dtype(int)],
     #             float:      [np.dtype('f'), np.dtype(float)],
     #             datetime.datetime:   [np.dtype('datetime64'), np.dtype('datetime64[ns]')],
-    #             } 
+    #             }
 
     #/************************************************************************/
     ppt2npt = lambda t: Type.__PPT2NPT[t]
@@ -138,8 +138,8 @@ class Type():
     # so that on the current machine where it is implemented
     # assert ppt2npy == {'B':'uint8','b': 'int8','H':'uint16','h':'int16','I':'uint32',
     #   'i':'int32', 'f':'float32', 'd':'float64'}
-    # but... in the future?!         
-    
+    # but... in the future?!
+
     #/************************************************************************/
     npt2ppt = lambda t: dict(Type.__PPT2NPT.values(), Type.__PPT2NPT.keys())[t]
     """Conversion method Numpy -> Python pack types.
@@ -149,12 +149,12 @@ class Type():
     npt2pyt = lambda t: Type.__NPT2PYT[t]
     """Conversion method Numpy -> Python types.
     """
-    
+
     #/************************************************************************/
     pdt2pyt = npt2pyt
     """Conversion method Pandas -> Python types.
     """
-        
+
     #/************************************************************************/
     pyt2npt = lambda t: Type.__PYT2NPT[t]
     """Conversion method Python -> Numpy types.
@@ -166,33 +166,33 @@ class Type():
                    float:                      np.dtype(float), # np.dtype('f')
                    datetime.datetime:          np.dtype('datetime64'),
                    object:                     np.dtype('O')
-                   } 
-        
+                   }
+
     #/************************************************************************/
     upyt2npt = lambda t: Type.__UPYT2NPT[t]
     """Conversion method Python -> unique Numpy type.
     """
-        
+
     #/************************************************************************/
     upyt2pdt = upyt2npt
     """Conversion method Python -> unique Pandas type.
     """
-    
+
     #/************************************************************************/
     pyt2pdt = pyt2npt
     """Conversion method Python -> Pandas types.
     """
-    
+
     # Dictionary of Numpy type -> unique Python name
     __NPT2UPYN = {k:v.__name__ for (k,v) in __NPT2PYT.items()}
-    
+
     # Dictionary of Python name -> unique Numpy type
     __UPYN2NPT = {k.__name__:v for (k,v) in __UPYT2NPT.items()}
 
     upytname2npt = lambda n: Type.__UPYN2NPT[n]
     """Conversion method Python type name -> unique Numpy type.
     """
-     
+
     unpt2pytname = lambda t: Type.__NPT2UPYN[t]
     """Conversion method Numpy type -> unique Python type name.
     """
@@ -200,120 +200,120 @@ class Type():
     upytname2pdt = upytname2npt
     """Conversion method Python type name -> unique Pandas type.
     """
-    
+
     #/************************************************************************/
     pytname2npt = lambda n: {k.__name__:v for (k,v) in Type.__PYT2NPT.items()}[n]
     """Conversion method Python type name -> Numpy types list.
     """
-    
+
     #/************************************************************************/
     pytname2pdt = pytname2npt
     """Conversion method Python type name -> Pandas types list.
     """
-    
+
     #/************************************************************************/
     @staticmethod
     def is_numeric(cls, arg):
         """Check whether an argument is a number.
-        
+
             >>> ans = Type.is_numeric(arg)
-      
+
         Arguments
         ---------
-        arg : 
+        arg :
             any input to test.
-      
+
         Returns
         -------
         ans : bool
-            :data:`True` if the input argument :data:`arg` is a number, :data:`False` 
+            :data:`True` if the input argument :data:`arg` is a number, :data:`False`
             otherwise.
         """
         try:
             float(arg)
             return True
         except (ValueError, TypeError):
-            return False    
-    
+            return False
+
     #/************************************************************************/
     @staticmethod
     def is_string(cls, arg):
         """Check whether an argument is a string.
-        
+
             >>> ans = Type.is_string(arg)
-      
+
         Arguments
         ---------
-        arg : 
+        arg :
             any input to test.
-      
+
         Returns
         -------
         ans : bool
-            :data:`True` if the input argument :data:`arg` is a string, :data:`False` 
+            :data:`True` if the input argument :data:`arg` is a string, :data:`False`
             otherwise.
         """
         return isinstance(arg, string_types)
-    
+
     #/************************************************************************/
     @classmethod
     def is_sequence(cls, arg):
-        """Check whether an argument is a "pure" sequence (*e.g.*, a :data:`list` 
+        """Check whether an argument is a "pure" sequence (*e.g.*, a :data:`list`
         or a :data:`tuple`), *i.e.* an instance of the :class:`collections.Sequence`
         (strings excluded).
-        
+
             >>> ans = Type.is_sequence(arg)
-      
+
         Arguments
         ---------
-        arg : 
+        arg :
             any input to test.
-      
+
         Returns
         -------
         ans : bool
-            :data:`True` if the input argument :data:`arg` is an instance of the 
-            :class:`collections.Sequence` class, but not a string (*i.e.,* not an 
-            instance of the :class:`six.string_types` class), :data:`False` 
+            :data:`True` if the input argument :data:`arg` is an instance of the
+            :class:`collections.Sequence` class, but not a string (*i.e.,* not an
+            instance of the :class:`six.string_types` class), :data:`False`
             otherwise.
         """
         return (isinstance(arg, Sequence) and not cls.is_string(arg))
-    
+
     #/************************************************************************/
     @classmethod
     def is_mapping(cls, arg):
         """Check whether an argument is a true dictionary (strings excluded).
-        
+
             >>> ans = Type.is_mapping(arg)
-      
+
         Arguments
         ---------
-        arg : 
+        arg :
             any input to test.
-      
+
         Returns
         -------
         ans : bool
-            :data:`True` if the input argument :data:`arg` is an instance of the 
+            :data:`True` if the input argument :data:`arg` is an instance of the
             :class:`collections.Mapping` class, but not a string .
         """
-        return (isinstance(arg, Mapping) and not cls.is_string(arg))  
-    
+        return (isinstance(arg, Mapping) and not cls.is_string(arg))
+
     #/************************************************************************/
     @staticmethod
     def is_type(obj, cls):
-        """Determine whether an object (as an instance is) of a given type defined 
-        by a class or a class name.        
-        
+        """Determine whether an object (as an instance is) of a given type defined
+        by a class or a class name.
+
             >>> ans = Type.is_type(obj, cls)
-            
+
         Arguments
         ---------
         obj : object
             an instance of a class.
         cls : str,type[list]
             the (list of) class(es) or its(their) name(s) to test.
-            
+
         Returns
         -------
         ans : bool
@@ -335,7 +335,7 @@ class Type():
     @staticmethod
     def is_subclass(obj, cls):
         """Check whether an object is an instance or a subclass of a given class.
-        
+
             >>> res = Type.is_subclass(obj, cls))
         """
         try:
@@ -352,20 +352,20 @@ class Type():
                 return any([issubclass(obj.__class__, c) for c in cls])
             except:
                 raise IOError("Unrecognised is_subclass() arg 1")
-        
+
     #/************************************************************************/
     @staticmethod
-    def type_name(obj): 
-        """Return the class name of an object given as an instance: nothing else 
-        than :literal:`obj.__class__.__name__`\ .  
-    
-            >>> name = Type.type_name(obj)     
-            
+    def type_name(obj):
+        """Return the class name of an object given as an instance: nothing else
+        than :literal:`obj.__class__.__name__`\ .
+
+            >>> name = Type.type_name(obj)
+
         Arguments
         ---------
         inst : object
             an instance of a class.
-            
+
         Returns
         -------
         name : str
@@ -382,7 +382,7 @@ class Type():
         """
         Example
         -------
-        
+
             >>> Type.subdtypes(np.generic)
         """
         subs = dtype.__subclasses__()
@@ -393,11 +393,11 @@ class Type():
     #/************************************************************************/
     @classmethod
     def to_type(cls, data, dtype, view=None):
-        """Perform type conversions of various structures (either :class:`list`, 
+        """Perform type conversions of various structures (either :class:`list`,
         :class:`tuple`, :class:`array` or :class:`dict`).
-        
+
             >>> output = Type.to_type(data, dtype, view=None)
-    
+
         Arguments
         ---------
         dtype : str
@@ -407,7 +407,7 @@ class Type():
             if x.dtype=='object':                           return x
             elif dtype is not None and x.dtype!=dtype:      return x.astype(dtype)
             elif view is not None and x.dtype!=view:        return x.view(dtype=view)
-            else:                                           return x       
+            else:                                           return x
         def totype(x): # dtype, kwargs defined 'outside'
             if np.isscalar(x):
                 if any([re.search(t, dtype) for t in ('int8','int16')]): return int(x)
@@ -415,26 +415,26 @@ class Type():
                 elif re.search('float', dtype):                         return float(x)
             elif isinstance(x, np.ndarray):
                 return totypearray(x)
-            elif cls.is_sequence(x) or cls.is_mapping(x):  
+            elif cls.is_sequence(x) or cls.is_mapping(x):
                 return cls.to_type(x, dtype, view) # recursive call
             else:
                 return x
         if isinstance(data, (np.ndarray, pd.DataFrame, pd.Series)):
             return totypearray(data)
-        elif cls.is_mapping(data): 
+        elif cls.is_mapping(data):
             return dict(zip(data.keys(), map(totype, data.values())))
-        elif cls.is_sequence(data): 
+        elif cls.is_sequence(data):
             return map(totype, data)
         else:
             return data
 
-    
+
 #==============================================================================
 # Class Struct
 #==============================================================================
 
 class Struct():
-    
+
     #/************************************************************************/
     @staticmethod
     def inspect_kwargs(kwargs, method):
@@ -442,7 +442,7 @@ class Struct():
         deleting all the keys that are not present in the signature of the method/function.
         """
         if kwargs == {}: return {}
-        kw = kwargs.copy() # deepcopy(kwargs) 
+        kw = kwargs.copy() # deepcopy(kwargs)
         parameters = inspect.signature(method).parameters
         keys = [key for key in kwargs.keys()                                          \
                 if key not in list(parameters.keys()) or parameters[key].KEYWORD_ONLY.value == 0]
@@ -451,60 +451,60 @@ class Struct():
 
     #/************************************************************************/
     @staticmethod
-    def update_instance(instance, flag, args, **kwargs):   
+    def update_instance(instance, flag, args, **kwargs):
         """Update or retrieve an instance (field) of the data class through the
         parameters passed in kwargs.
-        
+
             >>> res = Struct.update_instance(instance, flag, args, **kwargs)
-        
+
         Arguments
         ---------
         instance : object
             instance of a class with appropriated fields (eg. 'self' is passed).
         flag : bool
-            flag set to `True` when the given instance(s) is (are) updated from the 
-            parameters passed in kwargs when the parameters are not `None`, `False` 
+            flag set to `True` when the given instance(s) is (are) updated from the
+            parameters passed in kwargs when the parameters are not `None`, `False`
             when they are retrieved from `not None` instance(s);
         args : dict
             provide for each key set in kwargs, the name of the instance to consider.
-            
+
         Keyword Arguments
-        -----------------        
+        -----------------
         kwargs : dict
             dictionary with values used to set/retrieve instances in/from the data.
-        
+
         Returns
         -------
         res : dict
-        
+
         Note
         ----
         This is equivalent to perform:
-        
+
             >>> key = args.keys()[i]
             >>> val = kwargs.pop(key,None)
-            >>> if flag is False and val is None:       
+            >>> if flag is False and val is None:
             ...     val = getattr(self,args[key])
-            >>> if flag is True and val is not None:    
+            >>> if flag is True and val is not None:
             ...     setattr(self,args[key]) = val
             >>> res = val
-            
+
         for all keys :literal:`i` of :literal:`args`.
-        
+
         Examples
         --------
 
             >>> param = { my_key: 'name_of_my_instance' }
             >>> kwarg = { my_key: my_not_None_value }
-        
-        Set the :data:`name_of_my_instance` attribute of the class to :data:`my_value` and return 
+
+        Set the :data:`name_of_my_instance` attribute of the class to :data:`my_value` and return
         :data:`my_not_None_value`:
-        
-        >>> res = Type.update_instance(instance, True, param, **kwarg)
-    
+
+        >>> res = Struct.update_instance(instance, True, param, **kwarg)
+
         Retrieve :data:`name_of_my_instance` attribute:
-    
-        >>> res = Type.update_instance(instance, False, param, **kwarg)
+
+        >>> res = Struct.update_instance(instance, False, param, **kwarg)
         """
         if not Type.is_mapping(args):
             raise IOError("Dictionary requested in input")
@@ -526,15 +526,15 @@ class Struct():
     #/************************************************************************/
     @staticmethod
     def to_format(data, outform, inform=None):
-        """Perform structure conversions from/to: :class:`list`, :class:`tuple`, 
+        """Perform structure conversions from/to: :class:`list`, :class:`tuple`,
         :class:`array` and :class:`dict`\ .
-        
+
             >>> output = Struct.to_format(data, outform, inform=None)
-    
+
         Arguments
         ---------
         outform : str
-            string specifying the desired output format; it can any string in 
+            string specifying the desired output format; it can any string in
             :literal:`['array', 'dict', 'list', 'tuple']`\ .
         """
         if inform == outform:                               return data
@@ -563,7 +563,7 @@ class Struct():
                 else:                               data = data.values()
             if isinstance(data, (list, tuple)):     data = np.asarray(data)
             if isinstance(data, np.ndarray):                return data
-            elif isinstance(data, (pd.Series, pd.DataFrame)):   
+            elif isinstance(data, (pd.Series, pd.DataFrame)):
                                                             return data.to_numpy()
             else:                                           return data#raise IOError
         def todict(data):
@@ -571,28 +571,32 @@ class Struct():
             elif isinstance(data, dict):
                 newkeys = range(len(data))
                 if data.keys() == newkeys:                  return data
-                else:           return dict(zip(newkeys, data.values()))       
+                else:           return dict(zip(newkeys, data.values()))
             elif isinstance(data, np.ndarray):
                 if data.ndim == 2:                          return dict([(0, data)])
                 else:        return dict([(i, data[i]) for i in range(0, len(data))])
-            elif isinstance(data, (pd.Series, pd.DataFrame)):   
+            elif isinstance(data, (pd.Series, pd.DataFrame)):
                                                             return data.to_dict()
-            elif not isinstance(data, (list, tuple)):       return data 
+            elif not isinstance(data, (list, tuple)):       return data
             else:            return dict([(i, data[i]) for i in range(0, len(data))])
         formatf = {'array': toarray,  'dict': todict,             \
                     'list': tolist,   'tuple': totuple            \
                     }
         return formatf[outform](data)
-                
+
     #/************************************************************************/
     @staticmethod
     def flat(*obj):
         """Flatten a structure recursively.
-        
+
             >>> res = Struct.flat(*obj)
+
+        See also
+        --------
+        :meth:`~Struct.flatten_seq`, :meth:`~Struct.flatten`.
         """
         for item in obj:
-            if hasattr(item, '__iter__') and not Type.is_string(item): # 
+            if hasattr(item, '__iter__') and not Type.is_string(item): #
             #if isinstance(item, (Sequence, Mapping, set))  and not Type.is_string(item):
                 yield from Struct.flat(*item)
                 # for y in Struct.flat(*item):    yield y
@@ -604,9 +608,13 @@ class Struct():
     def flatten(structure, key="", path="", flattened=None, indexed=False):
         """Flatten any structure of any type (list, dict, tuple) and any depth in
         a recursive manner.
-    
+
             >>> res = Struct.flatten(structure, key="", path="",
                                      flattened=None, indexed=False)
+
+        See also
+        --------
+        :meth:`~Struct.flatten_seq`, :meth:`~Struct.flat`.
         """
         if indexed is False:
             if flattened is None:                   flattened = []
@@ -632,42 +640,46 @@ class Struct():
     @staticmethod
     def flatten_seq(arg, rec=False):
         """Flatten a list of lists (one-level only).
-        
+
             >>> flat = Struct.flatten_seq(arg, rec = False)
-            
+
         Arguments
         ---------
         arg : list[list]
             a list of nested lists.
-            
+
         Keyword arguments
         -----------------
         rec : bool
-            :data:`True` when the flattening shall be applied recursively over 
+            :data:`True` when the flattening shall be applied recursively over
             nested lists; default: :data:`False`.
-      
+
         Returns
         -------
         flat : list
             a list from which all nested elements have been flatten from 1 "level"
             up (case :data:`rec=False`) or through all levels (otherwise).
-            
+
         Examples
         --------
         A very basic way to flatten a list of lists:
-            
+
             >>> Struct.flatten_seq([[1],[[2,3],[4,5]],[6,7]])
                 [1, [2, 3], [4, 5], 6, 7]
             >>> Struct.flatten_seq([[1,1],[[2,2],[3,3],[[4,4],[5,5]]]])
                 [1, 1, [2, 2], [3, 3], [[4, 4], [5, 5]]]
-                
+
         As for the difference between recursive and non-recursive calls:
-            
+
             >>> seq = [[1],[[2,[3.5,3.75]],[[4,4.01],[4.25,4.5],5]],[6,7]]
             >>> Struct.flatten_seq(seq, rec=True)
                 [1, [2, [3.5, 3.75]], [[4, 4.01], [4.25, 4.5], 5], 6, 7]
             >>> Struct.flatten_seq(seq, rec=True)
                 [1, 2, 3.5, 3.75, 4, 4.01, 4.25, 4.5, 5, 6, 7]
+
+        See also
+        --------
+        :meth:`~Struct.flatten`, :meth:`~Struct.flat`.
         """
         if not Type.is_sequence(arg):
             arg = [arg,]
@@ -698,10 +710,14 @@ class Struct():
     def flatten_uniq(obj, key="", path="", flattened=None, indexed=False):
         """'Uniqify' and flatten the values of a structure of any type (list, dict,
         tuple) and any depth in a recursive manner.
-    
+
             >>> res = Struct.flatten_uniq(obj, key="", path="", flattened=None)
+
+        See also
+        --------
+        :meth:`~Struct.uniq_seq`, :meth:`~Struct.uniq_items`.
         """
-        obj =  Struct.flatten(obj, key=key, path=path, 
+        obj =  Struct.flatten(obj, key=key, path=path,
                               flattened=flattened, indexed=indexed)
         return obj if indexed is False else list(set(obj.values()))
 
@@ -709,6 +725,12 @@ class Struct():
     @staticmethod
     def uniq_seq(lst, order=False):
         """
+
+            >>> res = Struct.uniq_seq(list, order=False)
+
+        See also
+        --------
+        :meth:`~Struct.flatten_uniq`, :meth:`~Struct.uniq_items`.
         """
         if order is False:
             return list(set(lst))
@@ -721,6 +743,12 @@ class Struct():
     @staticmethod
     def uniq_items(*arg, items={}, order=False):
         """
+
+            >>> res = Struct.uniq_items(*arg, items={}, order=False)
+
+        See also
+        --------
+        :meth:`~Struct.flatten_uniq`, :meth:`~Struct.uniq_seq`.
         """
         if len(arg) == 1:
             arg = arg[0]
@@ -761,9 +789,9 @@ class Struct():
 #==============================================================================
 
 class NestedDict(dict):
-    """A dictionary-like structure that enables nested indexing of the dictionary 
-    contents and merging of multiply nested dictionaries along given dimensions. 
-    
+    """A dictionary-like structure that enables nested indexing of the dictionary
+    contents and merging of multiply nested dictionaries along given dimensions.
+
         >>> dnest = NestedDict(*args, **kwargs)
         >>> dnest = NestedDict(mapping, **kwargs)
         >>> dnest = NestedDict(iterables, **kwargs)
@@ -773,7 +801,7 @@ class NestedDict(dict):
     mapping :
         (an)other dictionar(y)ies; optional.
     iterables :
-        (an)other iterable object(s) in a form of key-value pair(s) where keys should 
+        (an)other iterable object(s) in a form of key-value pair(s) where keys should
         be immutable; optional.
 
     Keyword arguments
@@ -782,30 +810,27 @@ class NestedDict(dict):
         provides the depth order of the dimensions in the output dictionary;
         default: :data:`order` is :data:`None` and is ignored and the order
         of the dimensions in the output dictionary depends on their extraction
-        as (key,value) items; unless the input :data:`dict` is an instance of 
-        the :class:`collections.OrderedDict` class, it is highly recommended 
+        as (key,value) items; unless the input :data:`dict` is an instance of
+        the :class:`collections.OrderedDict` class, it is highly recommended
         to use this keyword argument.
     values : list,tuple
     _nested_ : dict
-    
+
     Returns
     -------
     dnest : dict
-        a empty nested dictionary whose (key,value) pairs are defined and
+        an empty nested dictionary whose (key,value) pairs are defined and
         ordered according to the arguments :data:`dic` and :data:`order`; say
         for instance that :data:`dic = {'dim1': 0, 'dim2': [1, 2]}, then:
-            
-            * :data:`Type.mapnest(dic)` returns :data:`nestdic={0: {1: {}, 2: {}}}`. 
-            * :data:`Type.mapnest(dic, order=['dim2', 'dim1'])` returns :data:`nestdic={1: {0: {}}, 2: {0: {}}}`. 
-    
-    Examples
-    --------
-    
+
+            * :data:`NestedDict(dic)` returns :data:`nestdic={0: {1: {}, 2: {}}}`.
+            * :data:`NestedDict(dic, order=['dim2', 'dim1'])` returns :data:`nestdic={1: {0: {}}, 2: {0: {}}}`.
+
     Examples
     --------
     Note the initialisation that completely differs from a "normal" :obj:`dict`
     data structure:
-        
+
         >>> dic = NestedDict({'a': 1, 'b': 2})
         >>> dic
             {1: {2: {}}}
@@ -819,12 +844,12 @@ class NestedDict(dict):
         >>> dic.order
             [0, 1]
         >>> dic.dimensions
-        
+
         >>> NestedDict(a=1, b=2)
             {'a': 1, 'b': 2}
-        
+
     However, in addition the data structure enables nested key settings, like adding a numeric key:
-        
+
         >>> dic = {'a': [1,2], 'b': [3,4]}
         >>> NestedDict(dic)
             {1: {3: {}, 4: {}}, 2: {3: {}, 4: {}}}
@@ -837,12 +862,12 @@ class NestedDict(dict):
             {3: {1: None, 2: None}, 4: {1: None, 2: None}}
         >>> NestedDict(dic, values=[10,20,30,40])
             {3: {1: 10, 2: 20}, 4: {1: 30, 2: 40}}
-                
+
     Note
     ----
-    See also `Python` module :mod:`AttrDict` that handles complex dictionary data 
+    See also `Python` module :mod:`AttrDict` that handles complex dictionary data
     structures (source available `here <https://github.com/bcj/AttrDict>`_).
-    
+
     See also
     --------
     :meth:`Type.is_mapping`.
@@ -862,12 +887,12 @@ class NestedDict(dict):
         try:
             assert order is None or isinstance(order,bool) or Type.is_sequence(order)
         except:
-            raise TypeError("Wrong format/value for ORDER argument")            
+            raise TypeError("Wrong format/value for ORDER argument")
         dic = kwargs.pop('_nested_', {})
         try:
             assert dic in (None,{}) or args in ((),(None,))
         except:
-            raise TypeError("Incompatible positional arguments with _NESTED_ keyword argument")            
+            raise TypeError("Incompatible positional arguments with _NESTED_ keyword argument")
         if dic in (None,{}):
             try:
                 dic, dimensions = self._deep_create(*args, **kwargs)
@@ -890,23 +915,23 @@ class NestedDict(dict):
         values = kwargs.pop('values', None)
         if values is None:
             return
-        elif not Type.is_sequence(values):    
+        elif not Type.is_sequence(values):
             values = [values,]
         try:
             assert len(values) == 1 or len(values) == self.xlen()
         except:
-            raise TypeError("Wrong format/value for VALUES argument")            
+            raise TypeError("Wrong format/value for VALUES argument")
         else:
-            if len(values) == 1:      
+            if len(values) == 1:
                 values = values * self.xlen()
         try:
             self.xupdate(*zip(self.xkeys(_force_list_=True), values))
         except:
             raise IOError("Error loading dictionary values")
-            
+
     #/************************************************************************/
-    def __getattr__(self, attr): 
-        # ugly trick here... 
+    def __getattr__(self, attr):
+        # ugly trick here...
         if attr in inspect.getmembers(self.__class__, predicate=inspect.ismethod):#analysis:ignore
             return object.__getattribute__(self, attr)
         try:
@@ -924,8 +949,8 @@ class NestedDict(dict):
         else:
             res = xvalues if xvalues in ([],[None],None) or (Type.is_sequence(xvalues) and len(xvalues)>1) \
             else xvalues[0]
-        return res 
-    
+        return res
+
     #/************************************************************************/
     def __copy__(self):
         cls = self.__class__
@@ -942,7 +967,7 @@ class NestedDict(dict):
         for k, v in self.__dict__.items():
             setattr(result, k, copy.deepcopy(v, memo))
         return result
-    
+
     #/************************************************************************/
     def __eq__(self, other):
         if isinstance(other, self.__class__):
@@ -961,7 +986,7 @@ class NestedDict(dict):
     #/************************************************************************/
     def __iter__(self):
         return self
-    
+
     #/************************************************************************/
     def __next__(self):
         if self.__cursor >= self.xlen():
@@ -979,7 +1004,7 @@ class NestedDict(dict):
             return rep.replace("'", "\"") # does actually make no sense
         except:
             return rep
-        
+
     #/************************************************************************/
     def __str__(self):
         if self.xlen() == 1:
@@ -1018,7 +1043,7 @@ class NestedDict(dict):
         if not (dimensions is None or Type.is_mapping(dimensions)):
             raise TypeError('wrong type for DIMENSIONS parameter')
         self.__dimensions = dimensions
-        
+
     @classmethod
     @deprecated('use depth property instead', run=True)
     def __depth(self, dic):
@@ -1040,28 +1065,28 @@ class NestedDict(dict):
     @classmethod
     def _deep_create(cls, *args, **kwargs):
         """Initialise a deeply nested dictionary from input (dimension,key) pairs
-        parsed as dictionary or list, or (key,value) pairs parsed as a list of 
+        parsed as dictionary or list, or (key,value) pairs parsed as a list of
         items.
-        
+
             >>> new_dnest, dimensions = NestedDict._deep_create(*args, **kwargs)
-            
+
         Arguments
         ---------
-        
+
         Keyword arguments
         -----------------
-        
+
         Returns
         -------
         new_dnest : dict
         dim : collections.OrderedDict
-        
+
         Examples
         --------
         it is useful to initialise a data structure as an empty nested dictionary:
-        
+
             >>> NestedDict._deep_create(a=1, b=2)
-                ({1: {2: {}}}, 
+                ({1: {2: {}}},
                 OrderedDict([('a', 1), ('b', 2)]))
             >>> d = {'a': [1,2], 'b': [3,4,5]}
             >>> NestedDict._deep_create(d)
@@ -1080,17 +1105,17 @@ class NestedDict(dict):
             >>> l2 = ([1,2], [3,4,5])
             >>> NestedDict._deep_create(l2)
                 ({1: {3: {}, 4: {}, 5: {}}, 2: {3: {}, 4: {}, 5: {}}},
-                 OrderedDict([(0, [1, 2]), (1, [3, 4, 5])])) 
-                
+                 OrderedDict([(0, [1, 2]), (1, [3, 4, 5])]))
+
         while it is also possible to fill it in with values:
-            
+
             >>> items = [(('a',1,'x'), 1), (('a',2,'y'), 2),
                          (('b',1,'y'), 3), (('b',2,'z'), 4),
                          (('b',1,'x'), 5)]
             >>> NestedDict._deep_create(items)
                 ({'a': {1: {'x': 1}, 2: {'y': 2}}, 'b': {1: {'x': 5, 'y': 3}, 2: {'z': 4}}},
                  OrderedDict([(0, ['a', 'b']), (1, [1, 2]), (2, ['y', 'z', 'x'])])
-        
+
         See also
         --------
         :meth:`~NestedDict._deep_merge`, :meth:`~NestedDict._deep_insert`.
@@ -1111,7 +1136,7 @@ class NestedDict(dict):
         except:
             raise TypeError("Wrong format for input arguments")
         else:
-            if len(args)==1: # and, obviously: Type.is_mapping(args[0])) 
+            if len(args)==1: # and, obviously: Type.is_mapping(args[0]))
                 args = args[0]
         try:
             assert not Type.is_mapping(args) or all([Type.is_sequence(v) for v in args.values()])
@@ -1125,19 +1150,19 @@ class NestedDict(dict):
         #    args = OrderedDict(args)
         #    if order is None and order is not False: # that should actually never happen at this stage
         #        order =  list(args.keys())
-        #    [args.update({k: [v,] for k,v in args.items() if not Type.is_sequence(v)})]            
+        #    [args.update({k: [v,] for k,v in args.items() if not Type.is_sequence(v)})]
         #    value = {} # None
         #    dimensions = OrderedDict(dict(zip(order,[None]*len(order))))
         #    try:
         #        for attr in order[::-1]:
         #            argattr = args[attr]
         #            if type(argattr)==tuple:    argattr = list(argattr)
-        #            dic = {a: copy.deepcopy(value) for a in argattr} 
+        #            dic = {a: copy.deepcopy(value) for a in argattr}
         #            dimensions.update({attr: argattr.copy()})
         #            value = dic
         #    except TypeError:
         #        raise IOError("Input dictionary argument not supported")
-        #elif all([Type.is_sequence(a[0]) for a in args]):  
+        #elif all([Type.is_sequence(a[0]) for a in args]):
         #    if order is None or isinstance(order,bool):
         #        order = list(range(len(args[0][0])))
         #    attrs = [list(set(a[0][i] for a in args)) for i in range(len(order))]
@@ -1157,7 +1182,7 @@ class NestedDict(dict):
         #    assert dic
         #except:
         #    dic, dimensions = {}, {}
-        #return dic, dimensions   
+        #return dic, dimensions
         if Type.is_mapping(args):
             args = list(args.items())
         if not all([len(a) == 2 for a in args]):
@@ -1165,9 +1190,9 @@ class NestedDict(dict):
         if all([Type.is_sequence(a[0]) for a in args]):
             if order is None or isinstance(order,bool):
                 order = [str(i) for i in range(len(args[0][0]))]
-            dimensions = OrderedDict(zip(order, 
+            dimensions = OrderedDict(zip(order,
                                          [list(set(v)) for v in zip(*[a[0] for a in args])]))
-        else: 
+        else:
             dimensions = OrderedDict(args)
             if order is None:
                 order = [a[0] for a in args]
@@ -1177,22 +1202,22 @@ class NestedDict(dict):
                 try:
                     keys = list(product(*[[item[1]] for item in args]))
                 except:
-                    keys = list(product(*args[1]))                    
+                    keys = list(product(*args[1]))
             args = list(zip(keys, [{}] * len(keys)))
         return cls._deep_insert({}, args), dimensions
-        
+
     #/************************************************************************/
     @classmethod
     def _deep_merge(cls, *dics, **kwargs):
         """Deep merge (recursively) an arbitrary number of (nested or not) dictionaries.
-    
+
             >>> new_dnest = NestedDict._deep_merge(*dics, **kwargs)
-            
+
         Arguments
         ---------
         dics : dict
             an arbitrary number of (possibly nested) dictionaries.
-            
+
         Keyword arguments
         -----------------
         in_place : bool
@@ -1203,19 +1228,19 @@ class NestedDict(dict):
         -------
         new_dnest : dict
             say that only two dictionaries are parsed, :data:`d1` and :data:`d2`
-            through :data:`dics` (in this order); first, :data:`d1` is "deep"-copied 
-            into :data:`new_dnest` (we consider the default case :data:`in_place=False`), 
-            then for each :data:`k,v` in :data:`d2`: 
-                
-                * if :data:`k` doesn't exist in :data:`new_dnest`, it is deep copied 
+            through :data:`dics` (in this order); first, :data:`d1` is "deep"-copied
+            into :data:`new_dnest` (we consider the default case :data:`in_place=False`),
+            then for each :data:`k,v` in :data:`d2`:
+
+                * if :data:`k` doesn't exist in :data:`new_dnest`, it is deep copied
                   from :data:`d2` into :data:`new_dic`;
-            
-            otherwise: 
-                
+
+            otherwise:
+
                 * if :data:`v` is a list, :data:`new_dnest[k]` is extended with :data:`d2[k]`,
                 * if :data:`v` is a set, :data:`new_dnest[k]` is updated with :data:`v`,
                 * if :data:`v` is a dict, it is recursively "deep"-updated,
-    
+
         Examples
         --------
         The method can be used to deep-merge dictionaries storing many different
@@ -1234,18 +1259,15 @@ class NestedDict(dict):
             >>> NestedDict._deep_merge(d1, d2, in_place = True)
             >>> print(d1)
                 {'a': {'b': {'x': '1','y': '2'}, 'c': {'gg': {'m': '3'}, 'xx': '4'}}}
-                
-        Note
-        ----
-        This code is adapted from F.Boender's original source code available at
-        `this address <https://www.electricmonk.nl/log/2017/05/07/merging-two-python-dictionaries-by-deep-updating/>`_
-        under a *MIT* license.
-        
+
         See also
         --------
         :meth:`~NestedDict._deepcreate`, :meth:`~NestedDict._deep_insert`,
         :meth:`~NestedDict.xupdate`.
-        """ 
+        """
+        # Note: This code is inspired by F.Boender's original source code available at
+        # `this address <https://www.electricmonk.nl/log/2017/05/07/merging-two-python-dictionaries-by-deep-updating/>`_
+        # under a *MIT* license.
         in_place = kwargs.pop('in_place', False)
         try:
             assert isinstance(in_place, bool)
@@ -1257,58 +1279,58 @@ class NestedDict(dict):
             raise TypeError("Wrong format/value for input arguments")
         def _recurse(target, src):
             for k, v in src.items():
-                #if Type.is_sequence(v):  
+                #if Type.is_sequence(v):
                 #    if k in target:         target[k].extend(v)
                 #    else:                   target[k] = copy.deepcopy(v)
-                #elif Type.is_mapping(v):  
+                #elif Type.is_mapping(v):
                 #    if k in target:         recurse(target[k], v)
                 #    else:                   target[k] = copy.deepcopy(v)
                 #elif type(v) == set:
                 #    if k in target:         target[k].update(v.copy())
                 #    else:                   target[k] = v.copy()
                 #else:
-                #    if k in target:     
+                #    if k in target:
                 #        if type(target[k]) == tuple:        target.update({k: list(target[k])})
                 #        elif not type(target[k]) == list:   target[k] = [target[k],]
                 #        target[k].append(v)
                 #    else:
                 #        target[k] = copy.copy(v)
-                if k in target:     
+                if k in target:
                     if type(v) != type(target[k]):
-                        if type(target[k]) == tuple:        
+                        if type(target[k]) == tuple:
                             target.update({k: list(target[k])})
-                        elif type(target[k]) != list:   
-                            target[k] = [target[k],]    
+                        elif type(target[k]) != list:
+                            target[k] = [target[k],]
                     elif not(Type.is_mapping(target[k]) or Type.is_sequence(target[k])):
-                        target[k] = [target[k],]                        
+                        target[k] = [target[k],]
                 #elif type(v)!=type(target[k]):              target[k] = []
-                if Type.is_sequence(v): 
-                    if k in target:                         
+                if Type.is_sequence(v):
+                    if k in target:
                         try:
                             target[k].extend(v)
                         except:
                             target[k] = target[k] + v
-                    else:                                   
+                    else:
                         target[k] = deepcopy(v)
-                elif Type.is_mapping(v):  
-                    if k in target:         
+                elif Type.is_mapping(v):
+                    if k in target:
                         _recurse(target[k], v)
-                    else:                   
+                    else:
                         target[k] = deepcopy(v)
                 elif type(v) == set:
-                    if k in target:                         
+                    if k in target:
                         try:
                             target[k].update(v.copy())
                         except:
                             target[k].append(v)
-                    else:                                   
+                    else:
                         target[k] = v.copy()
                 else:
-                    if k in target:                         
+                    if k in target:
                         target[k].append(v)
                     else:
                         try:
-                           target[k] = copy(v)   
+                           target[k] = copy(v)
                         except:
                             target[k] = v
         def _reduce(*dics):
@@ -1325,16 +1347,16 @@ class NestedDict(dict):
     @classmethod
     def _deep_insert(cls, dic, *items, **kwargs):
         """Deep merge (recursively) a (nested or not) dictionary with items.
-    
+
             >>> new_dnest = NestedDict._deep_insert(dic, *items, **kwargs)
-            
+
         Arguments
         ---------
         dic : dict
             a (possibly nested) dictionary.
         items : tuple,list
             items of the form :literal:`(key,value)` pairs
-            
+
         Keyword arguments
         -----------------
         in_place : bool
@@ -1344,23 +1366,23 @@ class NestedDict(dict):
         Returns
         -------
         new_dnest : dict
-            
+
         Examples
         --------
         First simple examples:
-            
+
             >>> NestedDict._deep_insert({}, (1,2))
                 {1: 2}
             >>> NestedDict._deep_insert({}, (1,2), (3,4))
                 {1: 2, 3: 4}
             >>> NestedDict._deep_insert({}, ((1,2),(3,4)))
-                {1: {2: (3, 4)}}                
+                {1: {2: (3, 4)}}
             >>> NestedDict._deep_insert({}, ((1, 2), 3), ((4, 5), 6))
                 {1: {2: 3}, 4: {5: 6}}
-        
-        Note the various way/syntax items can be parsed, and the different possible 
+
+        Note the various way/syntax items can be parsed, and the different possible
         outputs:
-            
+
             >>> NestedDict._deep_insert({}, (1,2), (1,3) )
                 {1: 3} # the last inserted
             >>> NestedDict._deep_insert({}, (1,2), (3,(4,5)) )
@@ -1389,9 +1411,9 @@ class NestedDict(dict):
             >>> d2 = {1: -2, 3: {4: {-5:{-6:-7}}}, 8:-9}
             >>> NestedDict._deep_insert(d2, *items2)
                 {1: 2, 3: {4: {-5: {-6: -7}, 5: 6, 7: 8, 9: 10}}, 8: -9, 11: 12}
-        
+
         The keyword argument :data:`in_place` can be used for in-place update:
-            
+
             >>> items = ((1,2), (3,(4,5)))
             >>> d = {}
             >>> NestedDict._deep_insert(d, items, in_place=True)
@@ -1408,10 +1430,10 @@ class NestedDict(dict):
             >>> NestedDict._deep_insert(d, items, in_place=True)
             >>> print(d)
                 {'a': {1: {'x': 1}, 2: {'y': 2}}, 'b': {1: {'x': 5, 'y': 3}, 2: {'z': 4}}}
-        
+
         See also
         --------
-        :meth:`~NestedDict._deepcreate`, :meth:`~NestedDict._deep_merge`, 
+        :meth:`~NestedDict._deepcreate`, :meth:`~NestedDict._deep_merge`,
         :meth:`~NestedDict.xupdate`.
         """
         in_place = kwargs.pop('in_place', False)
@@ -1437,36 +1459,36 @@ class NestedDict(dict):
         def _recurse(target, src):
             key, v = src
             k = key[0] if Type.is_sequence(key) else key
-            if Type.is_sequence(key) and len(key)>1: 
-                if k not in target:         
+            if Type.is_sequence(key) and len(key)>1:
+                if k not in target:
                     target[k] = None
                 if not Type.is_mapping(target[k]):
                     #if type(target[k]) == tuple:        target.update({k: list(target[k])})
                     #elif not type(target[k]) == list:   target[k] = [target[k],]
                     temp = {}
                     _recurse(temp, (key[1:],v))
-                    target[k] = temp                    
-                else:    
+                    target[k] = temp
+                else:
                     _recurse(target[k], (key[1:],v))
             else:
-                #if k in target:     
+                #if k in target:
                 #    if type(v)!=type(target[k]):
-                #        if type(target[k]) == tuple:        
+                #        if type(target[k]) == tuple:
                 #            target.update({k: list(target[k])})
-                #        elif not type(target[k]) == list:   
-                #            target[k] = [target[k],]    
+                #        elif not type(target[k]) == list:
+                #            target[k] = [target[k],]
                 #    elif not(Type.is_mapping(target[k]) or Type.is_sequence(target[k])):
-                #        target[k] = [target[k],]                        
+                #        target[k] = [target[k],]
                 ##elif type(v)!=type(target[k]):              target[k] = []
-                if Type.is_sequence(v): 
+                if Type.is_sequence(v):
                     target[k] = v #deepcopy(v)
-                elif Type.is_mapping(v):  
+                elif Type.is_mapping(v):
                     target[k] = deepcopy(v)
                 elif type(v) == set:
                     target[k] = v.copy()
                 else:
                     try:
-                       target[k] = copy(v)   
+                       target[k] = copy(v)
                     except:
                         target[k] = v
         dd = None
@@ -1474,7 +1496,7 @@ class NestedDict(dict):
             dd = deepcopy(dic)
         for item in items:
             _recurse(dd if dd is not None else dic, item)
-        return dd 
+        return dd
 
     #/************************************************************************/
     def _deep_search(self, attr, *arg, **kwargs):
@@ -1491,7 +1513,7 @@ class NestedDict(dict):
         try:
             assert set(kwargs.keys()).difference(set(self.order)) == set()
         except:
-            raise IOError("Parsed dimensions are not recognised")  
+            raise IOError("Parsed dimensions are not recognised")
         order = self.order.copy()
         if attr == 'keys':
             if arg not in ((), ([],), (None,)):
@@ -1510,7 +1532,7 @@ class NestedDict(dict):
                     break
         else:
             pass
-        val = [self.copy()] 
+        val = [self.copy()]
         for i, dim in enumerate(order):
             val = Struct.flatten_seq([list(v.items()) for v in val])
             if dim in kwargs.keys():
@@ -1523,21 +1545,21 @@ class NestedDict(dict):
             else:
                 val = [v[1] for v in val]
         return val[0] if Type.is_sequence(val) and len(val)==1 else val
-    
+
     #/************************************************************************/
     @classmethod
     @deprecated('use generic method _deep_merge instead', run=True)
     def __nest_merge(cls, *dicts):
         #ignore-doc
         """Recursively merge an arbitrary number of nested dictionaries.
-    
+
             >>> new_dnest = NestedDict.__nest_merge(*dicts)
-            
+
         Arguments
         ---------
         dicts : dict
             an arbitrary number of (possibly nested) dictionaries.
-    
+
         Examples
         --------
 
@@ -1545,30 +1567,30 @@ class NestedDict(dict):
             >>> d2 = {'a': {'c': {'gg': {'m': '3'},'xx': '4'}}}
             >>> Type.__nest_merge(d1, d2)
                 {'a': {'b': {'x': '1','y': '2'}, 'c': {'gg': {'m': '3'}, 'xx': '4'}}}
-        """    
-        keys = set(k for d in dicts for k in d)    
+        """
+        keys = set(k for d in dicts for k in d)
         def _vals(key):
             withkey = (d for d in dicts if key in d.keys())
-            return [d[key] for d in withkey]    
+            return [d[key] for d in withkey]
         def _recurse(*values):
             if Type.is_mapping(values[0]):
                 return cls.__nest_merge(*values)
             if len(values) == 1:
                 return values[0]
-            raise IOError("Multiple non-dictionary values for a key")    
-        return dict((key, _recurse(*_vals(key))) for key in keys)  
-            
+            raise IOError("Multiple non-dictionary values for a key")
+        return dict((key, _recurse(*_vals(key))) for key in keys)
+
 
     #/************************************************************************/
     @classmethod
     def _deep_reorder(cls, dic, **kwargs):
         """Reorder a deeply nested dictionary.
-        
+
             >>> new_dnest = NestedDict._deep_reorder(dic, **kwargs)
-            
+
         Example
         -------
-        
+
             >>> d = {'a': [1,2], 'b': [3,4,5]}
             >>> r = NestedDict(d, values = list(range(6)))
             >>> print(r)
@@ -1614,7 +1636,7 @@ class NestedDict(dict):
         # new_xitems = [(sorted(item[0], key=lambda t: order.index(inorder[item[0].index(t)])), item[1]) for item in xitems]
         newxitems = zip(newxkeys, xvalues)
         if in_place is True:
-            # dic = NestedDict(newxitems, order = order) 
+            # dic = NestedDict(newxitems, order = order)
             [dic.pop(k) for k in list(dic.keys())]
             # [dic.xpop(k) for k in xkeys]
             dic.xupdate(list(newxitems))
@@ -1627,20 +1649,20 @@ class NestedDict(dict):
                     pass
             return
         else:
-            return cls(list(newxitems), order = order)   
+            return cls(list(newxitems), order = order)
 
     #/************************************************************************/
     @classmethod
     def _deepest(cls, dic, item='values'):
         """Extract the deepest keys, values or both (items) from a nested dictionary.
-            
+
             >>> l = NestedDict._deepest(dic, item='values')
-            
+
         Arguments
         ---------
         dic : dict
             a (possibly nested) dictionary.
-            
+
         Keyword arguments
         -----------------
         item : str
@@ -1654,10 +1676,10 @@ class NestedDict(dict):
         l : list
             contains the deepest keys, values or items extracted from :data:`dic`,
             depending on the keyword argument :data:`item`.
-    
+
         Examples
         --------
-            
+
             >>> d = {4:1, 6:2, 7:{8:3, 9:4, 5:{10:5}, 2:6, 6:{2:7, 1:8}}}
             >>> NestedDict._deepest(d)
                 [1, 2, 3, 4, 5, 6, 7, 8]
@@ -1687,13 +1709,13 @@ class NestedDict(dict):
                     elif item == 'keys':          yield k
                     elif item == 'values':        yield v
         return list(_recurse(dic, 1))
-    
+
     #/************************************************************************/
     def xget(self, *args, **kwargs):
         """Retrieve value from deep nested dictionary.
-        
+
             >>> val = dnest.xget(*args, **kwargs)
-        
+
         Examples
         --------
         """
@@ -1735,16 +1757,16 @@ class NestedDict(dict):
         if dimensions[order[0]] == []:
             dimensions = OrderedDict()
         super(NestedDict,self).pop(*args)
-        
+
     #/************************************************************************/
     def xpop(self, *arg):
         """Pop values out of deep nested dictionary.
-        
+
             >>> dnest.xpop(*arg)
-        
+
         Examples
         --------
-        
+
             >>> d = {'a': [1,2], 'b': [3,4,5]}
             >>> r = NestedDict(d)
             >>> print(r)
@@ -1797,12 +1819,12 @@ class NestedDict(dict):
     #/************************************************************************/
     def xupdate(self, *arg, **kwargs):
         """Update a deep nested dictionary.
-        
+
             >>> dnest.xupdate(*arg, **kwargs)
-        
+
         Examples
         --------
-        
+
             >>> d = {'a': [1,2], 'b': [3,4,5]}
             >>> r = NestedDict(d)
             >>> print(r)
@@ -1816,7 +1838,7 @@ class NestedDict(dict):
             >>> r.xupdate(20, a=2, b=3)
             >>> print(r)
                 {1: {3: 5, 4: 10, 5: {}}, 2: {3: 20, 4: 15, 5: {}}}
-                
+
             >>> d = NestedDict()
             >>> items = ((1,2), (3,(4,5)))
             >>> d.xupdate(items)
@@ -1829,28 +1851,28 @@ class NestedDict(dict):
             >>> d.xupdate(items)
             >>> print(d)
                 {'a': {1: {'x': 1}, 2: {'y': 2}}, 'b': {1: {'x': 5, 'y': 3}, 2: {'z': 4}}}
-            
+
         """
         if arg in((),(None,)) and kwargs == {}:
-            return 
+            return
         try:
             len(arg) == 1 or len(arg)==2
         except:
             raise TypeError("Wrong type/value for input argument")
         try:
-            assert kwargs == {} or not Type.is_mapping(arg) 
+            assert kwargs == {} or not Type.is_mapping(arg)
         except:
             raise IOError("No keyword argument requested with input dictionary argument")
         try:
-            assert kwargs != {} or Type.is_sequence(arg) 
+            assert kwargs != {} or Type.is_sequence(arg)
         except:
-            raise IOError("Items and keyword arguments incompatible when updating")                    
+            raise IOError("Items and keyword arguments incompatible when updating")
         #if kwargs == {}:
         #    try:
         #        xkeys = [a[0] for a in arg]
         #        xvalues = [a[1] for a in arg]
         #    except:
-        #        xkeys, xvalues = arg  
+        #        xkeys, xvalues = arg
         #    else:
         #        if len(xkeys)==1:
         #            xkeys, xvalues = xkeys[0], xvalues[0]
@@ -1859,7 +1881,7 @@ class NestedDict(dict):
         #    xkeys = self.xkeys(**kwargs)
         #    xvalues = arg
         #if not Type.is_sequence(xvalues):
-        #    xkeys, xvalues = [xkeys,], [xvalues,] 
+        #    xkeys, xvalues = [xkeys,], [xvalues,]
         #try:
         #    assert (len(xvalues)==1 or len(xvalues)==len(xkeys))            \
         #        and all([len(k)==len(self.order) for k in xkeys])
@@ -1870,7 +1892,7 @@ class NestedDict(dict):
         #        xvalues = xvalues * len(xkeys)
         #for i, xk in enumerate(xkeys):
         #    rdic = self
-        #    try:    
+        #    try:
         #        for j, x in enumerate(xk):
         #            if j<len(xk)-1:     rdic = rdic[x]
         #    except:
@@ -1880,13 +1902,13 @@ class NestedDict(dict):
         dimensions, order= self.dimensions.copy(), self.order
         if kwargs != {}:
             kwargs.update({'_force_list_': True})
-            arg = list(zip(self.xkeys(**kwargs),arg)) 
-        if Type.is_sequence(arg): 
+            arg = list(zip(self.xkeys(**kwargs),arg))
+        if Type.is_sequence(arg):
             if len(arg)==1:
                 arg = arg[0]
             try:
                 keys = zip(*[a[0] for a in arg])
-            except: 
+            except:
                 try:
                     keys = [[a[0]] for a in arg]
                 except:
@@ -1903,14 +1925,14 @@ class NestedDict(dict):
             if isinstance(arg,self.__class__):
                 [dimensions.update({k: dimensions.get(k,[])+v}) for k,v in arg.items()]
             # elif isinstance(arg,(dict,OrderedDict)): pass
-            self._deep_merge(self, arg, in_place=True)        
+            self._deep_merge(self, arg, in_place=True)
         self.dimensions = dimensions
         return
 
     #/************************************************************************/
     def keys(self, *arg, **kwargs):
         """Retrieve deepest (outmost) keys from a nested dictionary.
-        
+
             >>> keys = dnest.keys(**kwargs)
         """
         try:
@@ -1925,12 +1947,12 @@ class NestedDict(dict):
     #/************************************************************************/
     def xkeys(self, **kwargs):
         """Retrieve composed nested keys from a nested dictionary.
-        
+
             >>> keys = dnest.xkeys(**kwargs)
-            
+
         Examples
         --------
-        
+
             >>> dic = {'a': [1,2], 'b': [3,4,5], 'c':[6,7,8,9]}
             >>> res = NestedDict(dic, order = ['b', 'c', 'a'])
             >>> res.xkeys()
@@ -1948,7 +1970,7 @@ class NestedDict(dict):
         try:
             assert set(kwargs.keys()).difference(set(self.order)) == set()
         except:
-            raise IOError("Parsed dimensions are not recognised")  
+            raise IOError("Parsed dimensions are not recognised")
         dimensions = [[dim] if not Type.is_sequence(dim) else dim
                       for dim in [self.dimensions[k] for k in self.order]]
         xkeys = list(product(*dimensions))
@@ -1962,11 +1984,11 @@ class NestedDict(dict):
                         keys = [keys,]
                     [xkeys.remove(k) for k in list(xkeys) if k[i] not in keys]
         return xkeys if __force_list is True or xkeys in ([],None) or len(xkeys)>1 else xkeys[0]
-    
+
     #/************************************************************************/
     def values(self, *arg, **kwargs):
         """Retrieve (outmost) end-values of nested dictionary.
-        
+
             >>> values = dnest.values(*arg, **kwargs)
         """
         try:
@@ -1982,16 +2004,16 @@ class NestedDict(dict):
         if kwargs == {}:
             return super(NestedDict, self).values()
         return self._deep_search('values', **kwargs)
-    
+
     #/************************************************************************/
     def xvalues(self, **kwargs):
         """Retrieve nested values of nested dictionary.
-        
+
             >>> values = dnest.xvalues(*arg, **kwargs)
-            
+
         Examples
         --------
-        
+
             >>> dic = {'a':[1,2], 'b':[4,5]}
             >>> ord = ['a', 'b']
             >>> val = [{1:{2:3}}, {4:{5:6}, 7:{8:{9:10}}}, [11,12], 13]
@@ -2020,22 +2042,22 @@ class NestedDict(dict):
     #/************************************************************************/
     def items(self, **kwargs):
         """Retrieve items of nested dictionary.
-        
+
             >>> items = dnest.items(**kwargs)
         """
         if kwargs == {}:
             return super(NestedDict, self).items()
         return list(zip(cycle(self.keys(**kwargs)), self.values(**kwargs)))
-    
+
     #/************************************************************************/
     def xitems(self, **kwargs):
         """Retrieve nested items of nested dictionary.
-        
+
             >>> items = dnest.xitems(**kwargs)
 
         Examples
         --------
-        
+
             >>> dic = {'a': [1,2], 'b': [3,4,5], 'c': [6,7,8,9]}
             >>> r = NestedDict(dic, order = ['b', 'c', 'a'])
             >>> print(r)
@@ -2046,21 +2068,21 @@ class NestedDict(dict):
                 [((4, 6, 1), {}), ((4, 6, 2), {}), ((4, 7, 1), {}), ((4, 7, 2), {}),
                  ((4, 8, 1), {}), ((4, 8, 2), {}), ((4, 9, 1), {}), ((4, 9, 2), {})]
             >>> r.xitems(c=6, a=2)
-                [((3, 6, 2), {}), ((4, 6, 2), {}), ((5, 6, 2), {})]        
+                [((3, 6, 2), {}), ((4, 6, 2), {}), ((5, 6, 2), {})]
         """
-        return list(zip(self.xkeys(_force_list_=True), 
+        return list(zip(self.xkeys(_force_list_=True),
                         self.xvalues(_force_list_=True)))
-    
+
     #/************************************************************************/
     def xlen(self, *arg):
         """Retrieve depth lenght of the various dimensions of a nested dictionary.
-        
+
             >>> len = dnest.xlen(*arg)
 
-        
+
         Examples
         --------
-        
+
             >>> dic = {'a': [1,2], 'b': [3,4,5], 'c': [6,7,8,9]}
             >>> r = NestedDict(dic, order = ['b', 'c', 'a'])
             >>> print(r)
@@ -2081,7 +2103,7 @@ class NestedDict(dict):
             assert set(dimensions).difference(set(self.order)) == set()
         except:
             raise TypeError("Wrong type/value for input argument")
-        try:    
+        try:
             xlen = {k: v for k,v in self.__xlen.items() if k in dimensions}
         except:
             xlen = {}
@@ -2098,12 +2120,12 @@ class NestedDict(dict):
     #/************************************************************************/
     def reorder(self, order):
         """Reorder the nested structure of a nested dictionary.
-        
+
             >>> dnest.reorder(order)
-        
+
         Example
         -------
-        
+
             >>> d = {'a': [1,2], 'b': [3,4,5]}
             >>> r = NestedDict(d, values = list(range(6)))
             >>> r.order
@@ -2140,8 +2162,8 @@ class NestedDict(dict):
                 if norder != dorder:
                     ndic = dic._deep_reorder(norder)
                 self._deep_merge(self.__dict__, ndic or dic, in_place=True)
-        reduce(_umerge, dics) 
-    
+        reduce(_umerge, dics)
+
 
 #==============================================================================
 # Class DictDiffer
@@ -2162,7 +2184,7 @@ class DictDiffer():
 
     Example
     -------
-    
+
         >>> past = {'a': 1, 'b': 1, 'c': 0}
         >>> cur = {'a': 1, 'b': 2, 'd': 0}
         >>> diff = DictDiffer(cur, past)
@@ -2183,20 +2205,20 @@ class DictDiffer():
         self.intersect = self.current_keys.intersection(self.past_keys)
 
     def added(self):
-        """List items added (added keys).""" 
+        """List items added (added keys)."""
         return self.current_keys - self.intersect
 
     def removed(self):
-        """List items removed (removed keys).""" 
+        """List items removed (removed keys)."""
         return self.past_keys - self.intersect
 
     def changed(self):
-        """List items changed (same keys with different values)""" 
+        """List items changed (same keys with different values)"""
         return set(o for o in self.intersect
                    if self.past_dict[o] != self.current_dict[o])
 
     def unchanged(self):
-        """List unchanged items (same keys, same values).""" 
-         return set(o for o in self.intersect 
-                    if self.past_dict[o] == self.current_dict[o]) 
+        """List unchanged items (same keys, same values)."""
+         return set(o for o in self.intersect
+                    if self.past_dict[o] == self.current_dict[o])
 

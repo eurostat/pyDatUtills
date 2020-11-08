@@ -26,7 +26,7 @@ import io, os
 from warnings import warn
 
 from pydatutils.struct import Type, Struct
-from pydatutils.decorator import MethodDecorator, ActivationDecorator
+from pydatutils.decorator import MethodDecorator, ActivDecorator
 
 __DEFFLAG_PARSER_IGNORE     = False
 FLAG_PARSER_IGNORE          = __DEFFLAG_PARSER_IGNORE
@@ -54,7 +54,7 @@ class BaseParserDecorator(MethodDecorator):
         try:
             assert self._key is None or Type.is_string(self._key)
         except:
-            raise TypeError("Wrong type for KEY argument")
+            raise TypeError("Wrong type for _KEY_ argument")
         self._parse_cls = kwargs.pop('_parse_cls_',None)
         if self._parse_cls is not None and not Type.is_sequence(self._parse_cls):
             self._parse_cls = [self._parse_cls,]
@@ -62,7 +62,7 @@ class BaseParserDecorator(MethodDecorator):
             assert self._parse_cls is None or (Type.is_sequence(self._parse_cls)    \
                 and all([isinstance(c,type) for c in self._parse_cls]))
         except:
-            raise TypeError("Wrong type for PARSE_CLS argument")
+            raise TypeError("Wrong type for _PARSE_CLS_ argument")
         if '_values_' in kwargs:
             self._values = kwargs.pop('_values_')
             if self._values is not None and not Type.is_mapping(self._values):
@@ -70,7 +70,7 @@ class BaseParserDecorator(MethodDecorator):
             try:
                 assert self._values is None or Type.is_mapping(self._values)
             except:
-                raise TypeError("Wrong type for VALUES argument")
+                raise TypeError("Wrong type for _VALUES_ argument")
         if '_key_default_' in kwargs:
             self._key_default = kwargs.pop('_key_default_')
 
@@ -123,25 +123,10 @@ class BaseParserDecorator(MethodDecorator):
 
 
 #==============================================================================
-# Class ActivationParser
+# Class BaseParserCollection
 #==============================================================================
 
-class ActivationParser(ActivationDecorator):
-
-    INHIBITOR = 'FLAG_PARSER_IGNORE'
-    FLAG_PARSER_IGNORE = False
-
-    #/************************************************************************/
-    @classmethod
-    def inhibitor_rule(cls):
-        return FLAG_PARSER_IGNORE
-
-
-#==============================================================================
-# Class BaseParser
-#==============================================================================
-
-class BaseParser():
+class BaseParserCollection():
     """Generic class implementing dummy decorators of methods and functions used
     to parse and check arguments.
     """
@@ -196,7 +181,7 @@ class BaseParser():
         """Generic method that enables defining a class decorator of functions
         and methods that can parse any parameter of a given class.
 
-            >>> decorator = BaseParser.parse_class(parse_cls, key,
+            >>> decorator = BaseParserCollection.parse_class(parse_cls, key,
                                                    _values_=None, _key_default_=None)
 
         Arguments
@@ -217,7 +202,7 @@ class BaseParser():
 
         Returns
         -------
-        decorator : :class:`_Decorator.Parser.Base)`
+        decorator : :class:`~BaseParserDecorator`
             A parsing class that can be used to decorate any method or function
             that accepts :data:`key` as a keyword argument to parse an argument
             of type :data:`myclass`.
@@ -235,7 +220,7 @@ class BaseParser():
 
         we then use:
 
-            >>> decorator = BaseParser.parse_class(parse_cls, key, _values_=values)
+            >>> decorator = BaseParserCollection.parse_class(parse_cls, key, _values_=values)
             >>> decorator(func)(dummy_key=0)
                 AssertionError: wrong format for DUMMY_KEY argument
             >>> decorator(func)(dummy_key='dumb')
@@ -289,9 +274,9 @@ class BaseParser():
 
         Examples
         --------
-        Given a subclass of :class:`BaseParser`:
+        Given a subclass of :class:`BaseParserCollection`:
 
-            >>> class SomeParser(BaseParser):
+            >>> class SomeParser(BaseParserCollection):
                     class parse_dumb(BaseParserDecorator):
                         def __call__(self, *args, **kwargs):
                             kwargs.update({'dumb' : 0})
@@ -330,8 +315,8 @@ class BaseParser():
         Note
         ----
         * For each dimension :data:`dim` in the input list :data:`dimensions`, both
-          a variable :data:`KW_<dim>` and a parsing method :data:`parse_<dim>` need
-          to be defined in the class :class:`_Decorator`.
+          a variable :data:`KW_<dim>` and a parsing method :data:`<dim>` need
+          to be defined in the class :class:`Parser`.
         * The parsing methods :data:`parse_<dim>` need to define default values when
           no keyword argument is parsed.
 
@@ -352,10 +337,10 @@ class BaseParser():
         for dim in dimensions:
             try:
                 dim = dim.lower()
-                parse = getattr(cls, 'parse_' + dim)
+                parse = getattr(cls, dim)
             except:
                 # raise IOError("Parse method parse_%s not recognised" % dim)
-                warn("Parse method 'parse_%s' not recognised" % dim)
+                warn("Parse method '%s' not recognised" % dim)
                 continue # pass
             try:
                 func = lambda *a, **kw: [kw.get(dim)]
@@ -395,10 +380,25 @@ class BaseParser():
 
 
 #==============================================================================
+# Class ActivParser
+#==============================================================================
+
+class ActivParser(ActivDecorator):
+
+    INHIBITOR = 'FLAG_PARSER_IGNORE'
+    FLAG_PARSER_IGNORE = False
+
+    #/************************************************************************/
+    @classmethod
+    def inhibitor_rule(cls):
+        return FLAG_PARSER_IGNORE
+
+
+#==============================================================================
 # Class IOParser
 #==============================================================================
 
-class IOParser(Parser):
+class IOParser(BaseParserCollection):
 
     KW_SOURCE                   = 'source'
     KW_SRC                      = 'src'
@@ -418,10 +418,11 @@ class IOParser(Parser):
     PROTOCOLS                   = ['http', 'ftp', 'https']
 
     #/************************************************************************/
-    class parse_file(BaseParserDecorator):
+    @class_decorator(ActivParser.inhibitorFactory, special_member=['__call__'])
+    class file(BaseParserDecorator):
         """Class decorator of functions and methods used to parse a filename.
 
-            >>> new_func = IOParser.parse_file(func)
+            >>> new_func = IOParser.file(func)
 
         Arguments
         ---------
@@ -454,14 +455,14 @@ class IOParser(Parser):
         --------
 
             >>> func = lambda *args, **kwargs: kwargs.get('file')
-            >>> IOParser.parse_file(func)(file='test.txt')
+            >>> IOParser.file(func)(file='test.txt')
                 test.txt
-            >>> IOParser.parse_file(func)(dir='/home/sweet/home/',base='test.txt')
+            >>> IOParser.file(func)(dir='/home/sweet/home/',base='test.txt')
                 '/home/sweet/home/test.txt'
 
         See also
         --------
-        :meth:`~IOParser.parse_stream`, :meth:`~IOParser.parse_url`.
+        :meth:`~IOParser.stream`, :meth:`~IOParser.url`.
         """
         def __call__(self, *args, **kwargs):
             dirname, basename, filename = None, None, None
@@ -506,10 +507,11 @@ class IOParser(Parser):
             return self.func(*args, **kwargs)
 
     #/************************************************************************/
-    class parse_url(BaseParserDecorator):
+    @class_decorator(ActivParser.inhibitorFactory, special_member=['__call__'])
+    class url(BaseParserDecorator):
         """Class decorator of functions and methods used to parse a url.
 
-            >>> new_func = IOParser.parse_url(func)
+            >>> new_func = IOParser.url(func)
 
         Arguments
         ---------
@@ -520,7 +522,7 @@ class IOParser(Parser):
         Keyword arguments
         -----------------
         method_type,obj,cls :
-            see :meth:`~IOParser.parse_file`.
+            see :meth:`~IOParser.file`.
 
         Returns
         -------
@@ -534,18 +536,18 @@ class IOParser(Parser):
         --------
 
             >>> func = lambda *args, **kwargs: kwargs.get('url')
-            >>> IOParser.parse_url(func)(url=0)
+            >>> IOParser.url(func)(url=0)
                 !!! Wrong format for URL argument !!!
-            >>> IOParser.parse_url(func)(url='dumb')
+            >>> IOParser.url(func)(url='dumb')
                 !!! Wrong value for URL argument - level 'dumb' not supported !!!
-            >>> IOParser.parse_url(func)(url='http://dumb.com')
+            >>> IOParser.url(func)(url='http://dumb.com')
                 ['http://dumb.com']
-            >>> IOParser.parse_url(func)('http://dumb1.com', 'https://dumb2.com')
+            >>> IOParser.url(func)('http://dumb1.com', 'https://dumb2.com')
                 ['http://dumb1.com', 'https://dumb2.com']
 
         See also
         --------
-        :meth:`~IOParser.parse_file`, :meth:`~IOParser.parse_stream`.
+        :meth:`~IOParser.file`, :meth:`~IOParser.stream`.
         """
         def __call__(self, *args, **kwargs):
             url = None
@@ -580,10 +582,11 @@ class IOParser(Parser):
             return self.func(*args, **kwargs)
 
     #/************************************************************************/
-    class parse_stream(BaseParserDecorator):
+    @class_decorator(ActivParser.inhibitorFactory, special_member=['__call__'])
+    class stream(BaseParserDecorator):
         """Class decorator of functions and methods used to parse a url.
 
-            >>> new_func = IOParser.parse_stream(func)
+            >>> new_func = IOParser.stream(func)
 
         Arguments
         ---------
@@ -594,7 +597,7 @@ class IOParser(Parser):
         Keyword arguments
         -----------------
         method_type,obj,cls :
-            see :meth:`~IOParser.parse_file`.
+            see :meth:`~IOParser.file`.
 
         Returns
         -------
@@ -607,14 +610,14 @@ class IOParser(Parser):
         --------
 
             >>> func = lambda *args, **kwargs: kwargs.get('stream')
-            >>> IOParser.parse_stream(func)(stream=0)
+            >>> IOParser.stream(func)(stream=0)
                 !!! wrong format for STREAM argument !!!
-            >>> IOParser.parse_stream(func)(io.BytesIO(b'dumb'))
+            >>> IOParser.stream(func)(io.BytesIO(b'dumb'))
                 [<_io.BytesIO at 0x11d1d09b0>]
 
         See also
         --------
-        :meth:`~IOParser.parse_url`, :meth:`~IOParser.parse_file`.
+        :meth:`~IOParser.url`, :meth:`~IOParser.file`.
         """
         def __call__(self, *args, **kwargs):
             stream = None
@@ -629,7 +632,7 @@ class IOParser(Parser):
                     stream = list(args)
                 else:
                     raise IOError("Input %s argument(s) not recognised" % IOParser.KW_STREAM.upper())
-            if not(stream is None or kwargs.get(_Decorator.KW_STREAM) is None):
+            if not(stream is None or kwargs.get(IOParser.KW_STREAM) is None):
                 raise IOError("Don''t mess up with me - duplicated argument parsed")
             elif stream is None:
                 stream = kwargs.pop(IOParser.KW_STREAM, '')
@@ -668,7 +671,7 @@ class IOParser(Parser):
                     assert Type.is_string(url) and Type.is_string(path) \
                         and isinstance(r,(bytes,requests.Response,aiohttp.ClientResponse))
                 except:
-                    raise Error('parsed initialising parameters not recognised')
+                    raise TypeError("Parsed initialising parameters not recognised")
                 super(_CachedResponse,self).__init__()
                 self.url = url
                 self._cache_path = self.cache_store = path
@@ -688,7 +691,7 @@ class IOParser(Parser):
 # Class GeoParser
 #==============================================================================
 
-class GeoParser(BaseParser):
+class GeoParser(BaseParserCollection):
 
     KW_LATITUDE = KW_LAT        = 'lat'
     KW_LONGITUDE = KW_LON       = 'Lon'
@@ -703,7 +706,7 @@ class GeoParser(BaseParser):
     KW_ADDRESS                  = 'address'
     KW_CITY                     = 'city'
     KW_COUNTRY                  = 'country'
-    KW_POSTCODE = KW_ZIPCODE      = 'zip'
+    KW_POSTCODE = KW_ZIPCODE    = 'zip'
 
     KW_LOCATION = KW_LOC        = 'location'
     KW_AREA                     = 'area'
@@ -721,12 +724,12 @@ class GeoParser(BaseParser):
     KW_SIZE                     = 'size'
 
     #/************************************************************************/
-    @class_decorator(ActivationParser.inhibitorFactory, special_member=['__call__'])
-    class parse_coordinate(BaseParserDecorator):
+    @class_decorator(ActivParser.inhibitorFactory, special_member=['__call__'])
+    class coordinate(BaseParserDecorator):
         """Class decorator of functions and methods used to parse place :literal:`(lat,Lon)`
         coordinates.
 
-            >>> new_func = GeoParser.parse_coordinate(func)
+            >>> new_func = GeoParser.coordinate(func)
 
         Arguments
         ---------
@@ -760,7 +763,7 @@ class GeoParser(BaseParser):
         Some dummy examples:
 
             >>> func = lambda coord, *args, **kwargs: coord
-            >>> new_func = GeoParser.parse_coordinate(func)
+            >>> new_func = GeoParser.coordinate(func)
             >>> new_func(coord=[[1,-1],[2,-2]], order='Ll')
                 [[-1, 1], [-2, 2]]
             >>> new_func(**{'lat':[1,2], 'Lon': [-1,-2]})
@@ -804,23 +807,21 @@ class GeoParser(BaseParser):
 
         See also
         --------
-        :meth:`~GeoParser.parse_place`, :meth:`~GeoParser.parse_place_or_coordinate`,
-        :meth:`~GeoParser.parse_geometry`.
+        :meth:`~GeoParser.place`, :meth:`~GeoParser.place_or_coordinate`,
+        :meth:`~GeoParser.geometry`.
         """
         try:
-            if settings.POLYLINE:    import polyline
-            else:           polyline = True
-            assert polyline
+            import polyline
         except:
             polyline = False
-            Warnings('POLYLINE (https://pypi.python.org/pypi/polyline/) not loaded')
+            #Warnings('POLYLINE (https://pypi.python.org/pypi/polyline/) not loaded')
         else:
-            if settings.POLYLINE:   Warnings('POLYLINE help: https://github.com/hicsail/polyline')
+            #Warnings('POLYLINE help: https://github.com/hicsail/polyline')
             pass
         def __call__(self, *args, **kwargs):
             order = kwargs.pop('order', GeoParser.KW_LATLON)
             if not Type.is_string(order) or not order in (GeoParser.KW_LONLAT,GeoParser.KW_LATLON):
-                raise IOError('wrong order parameter')
+                raise IOError("Wrong order parameter")
             coord, lat, lon, poly = None, None, None, None
             if args not in ((None,),()):
                 if all([isinstance(a,_Feature) for a in args]):
@@ -847,7 +848,10 @@ class GeoParser(BaseParser):
                 coord = kwargs.pop(GeoParser.KW_COORD, None)
                 lat = kwargs.pop(GeoParser.KW_LAT, None) or kwargs.pop(GeoParser.KW_Y, None)
                 lon = kwargs.pop(GeoParser.KW_LON, None) or kwargs.pop(GeoParser.KW_X, None)
-                poly = self.polyline and kwargs.get(GeoParser.KW_POLYLINE)
+                try:
+                    poly = self.polyline and kwargs.get(GeoParser.KW_POLYLINE)
+                except:
+                    pass
             elif not (kwargs.get(GeoParser.KW_LAT) is None and \
                       kwargs.get(GeoParser.KW_LON) is None and \
                       kwargs.get(GeoParser.KW_COORD) is None):
@@ -883,11 +887,12 @@ class GeoParser(BaseParser):
             return self.func(coord, **kwargs)
 
     #/************************************************************************/
-    class parse_place(BaseParserDecorator):
+    @class_decorator(ActivParser.inhibitorFactory, special_member=['__call__'])
+    class place(BaseParserDecorator):
         """Class decorator of functions and methods used to parse place (topo,geo)
         names.
 
-            >>> new_func = GeoParser.parse_place(func)
+            >>> new_func = GeoParser.place(func)
 
         Arguments
         ---------
@@ -898,7 +903,7 @@ class GeoParser(BaseParser):
         Keyword arguments
         -----------------
         method_type,obj,cls :
-            see :meth:`~GeoParser.parse_coordinate`.
+            see :meth:`~GeoParser.coordinate`.
 
         Returns
         -------
@@ -911,7 +916,7 @@ class GeoParser(BaseParser):
         Very basic parsing examples:
 
             >>> func = lambda place, *args, **kwargs: place
-            >>> new_func = GeoParser.parse_place(func)
+            >>> new_func = GeoParser.place(func)
             >>> new_func(place='Bruxelles, Belgium')
                 ['Bruxelles, Belgium']
             >>> new_func(city=['Athens','Heraklion'],country='Hellas')
@@ -934,7 +939,7 @@ class GeoParser(BaseParser):
         Therefore, things like that should be avoided:
 
             >>> new_func('Athens, Hellas', place='Berlin, Germany')
-                Error: !!! dont mess up with me - duplicated place argument parsed !!!
+                !!! Dont mess up with me - duplicated place argument parsed !!!
 
         Note
         ----
@@ -944,8 +949,8 @@ class GeoParser(BaseParser):
 
         See also
         --------
-        :meth:`~GeoParser.parse_coordinate`, :meth:`~GeoParser.parse_place_or_coordinate`,
-        :meth:`~GeoParser.parse_geometry`.
+        :meth:`~GeoParser.coordinate`, :meth:`~GeoParser.place_or_coordinate`,
+        :meth:`~GeoParser.geometry`.
         """
         def __call__(self, *args, **kwargs):
             place, address, city, country, zipcode = '', '', '', '', ''
@@ -954,34 +959,34 @@ class GeoParser(BaseParser):
                     try:
                         place = [a.place for a in args]
                     except:
-                        raise Error('parsed place feature not recognised')
+                        raise IOError("Parsed place feature not recognised")
                 elif all([Type.is_string(a) for a in args]):
                     place = list(args)
                 elif len(args) == 1 and Type.is_sequence(args[0]):
                     place = args[0]
                 else:
-                    raise Error('input arguments not recognised')
+                    raise IOError("Input arguments not recognised")
             if place in ('',None):
-                place = kwargs.pop('place', None)
-                address = kwargs.pop('address', None)
-                city = kwargs.pop('city', None)
-                country = kwargs.pop('country', None)
-                zipcode = kwargs.pop('zip', None)
-            elif not (kwargs.get('place') is None and   \
-                      kwargs.get('address') is None and \
-                      kwargs.get('city') is None and    \
-                      kwargs.get('country') is None and \
-                      kwargs.get('zip') is None):
-                raise Error('don''t mess up with me - duplicated place argument parsed')
+                place = kwargs.pop(GeoParser.KW_PLACE, None)
+                address = kwargs.pop(GeoParser.KW_ADDRESS, None)
+                city = kwargs.pop(GeoParser.KW_CITY, None)
+                country = kwargs.pop(GeoParser.KW_COUNTRY, None)
+                zipcode = kwargs.pop(GeoParser.KW_POSTCODE, None)
+            elif not (kwargs.get(GeoParser.KW_PLACE) is None and   \
+                      kwargs.get(GeoParser.KW_ADDRESS) is None and \
+                      kwargs.get(GeoParser.KW_CITY) is None and    \
+                      kwargs.get(GeoParser.KW_COUNTRY) is None and \
+                      kwargs.get(GeoParser.KW_POSTCODE) is None):
+                raise IOError("Don''t mess up with me - duplicated place argument parsed")
             try:
                 assert not(place in ('',None) and country in ('',None) and city in ('',None))
             except AssertionError:
                 # return self.func(*args, **kwargs)
-                raise ValueError('no input place arguments passed')
+                raise ValueError("No input place arguments passed")
             try:
                 assert place in ('',None) or address in ('',None)
             except AssertionError:
-                raise Error('too many place arguments')
+                raise IOError("Too many place arguments")
             if address not in ('',None):        place = address
             if place in ('',None):              place = []
             if Type.is_string(place): place = [place,]
@@ -991,7 +996,7 @@ class GeoParser(BaseParser):
                 if place == []:                 place = city
                 else:
                     if len(city) > 1:
-                        raise Error('inconsistent place with multiple cities')
+                        raise IOError("Inconsistent place with multiple cities")
                     place = [', '.join(_) for _ in zip(place, itertools.cycle(city))]
             if zipcode not in ('',None):
                 if Type.is_string(zipcode):
@@ -999,7 +1004,7 @@ class GeoParser(BaseParser):
                 if place == []:                 place = zipcode
                 else:
                     if len(zipcode) > 1:
-                        raise Error('inconsistent place with multiple zipcodes')
+                        raise IOError("Inconsistent place with multiple zipcodes")
                     place = [', '.join(_) for _ in zip(place, itertools.cycle(zipcode))]
             if country not in ('',None):
                 if Type.is_string(country):
@@ -1007,21 +1012,22 @@ class GeoParser(BaseParser):
                 if place == []:                 place = country
                 else:
                     if len(country) > 1:
-                        raise Error('inconsistent place with multiple countries')
+                        raise IOError("Inconsistent place with multiple countries")
                     place = [', '.join(_) for _ in zip(place, itertools.cycle(country))]
             if place in (None,[],''):
-                raise Error('no input arguments passed')
+                raise IOError("No input arguments passed")
             if REDUCE_ANSWER and len(place)==1:    place = place[0]
             if not all([Type.is_string(p) for p in place]):
-                raise Error('wrong format for input place')
+                raise TypeError("Wrong format for input place")
             return self.func(place, **kwargs)
 
     #/************************************************************************/
-    class parse_place_or_coordinate(BaseParserDecorator):
+    @class_decorator(ActivParser.inhibitorFactory, special_member=['__call__'])
+    class place_or_coordinate(BaseParserDecorator):
         """Class decorator of functions and methods used to parse place :literal:`(lat,Lon)`
         coordinates or place names.
 
-            >>> new_func = GeoParser.parse_place_or_coordinate(func)
+            >>> new_func = GeoParser.place_or_coordinate(func)
 
         Arguments
         ---------
@@ -1032,7 +1038,7 @@ class GeoParser(BaseParser):
         Keyword arguments
         -----------------
         method_type,obj,cls :
-            see :meth:`~GeoParser.parse_coordinate`.
+            see :meth:`~GeoParser.coordinate`.
 
         Returns
         -------
@@ -1040,14 +1046,14 @@ class GeoParser(BaseParser):
             the decorated function that now accepts  :data:`coord` or :data:`lat`
             and :data:`Lon` as new keyword argument(s) to parse geographic
             coordinates, plus some additional keyword argument (see *Notes* of
-            :meth:`~GeoParser.parse_coordinate` method).
+            :meth:`~GeoParser.coordinate` method).
 
         Examples
         --------
         Some dummy examples:
 
             >>> func = lambda *args, **kwargs: [kwargs.get('coord'), kwargs.get('place')]
-            >>> new_func = GeoParser.parse_place_or_coordinate(func)
+            >>> new_func = GeoParser.place_or_coordinate(func)
             >>> new_func(lat=[1,2], Lon=[-1,-2])
                 [[[1, -1], [2, -2]], None]
             >>> new_func(place='Bruxelles, Belgium')
@@ -1056,29 +1062,29 @@ class GeoParser(BaseParser):
         Note
         ----
         The output decorated method :data:`new_func` can parse all of the keys
-        already supported by :meth:`~GeoParser.parse_place` and
-        :meth:`~GeoParser.parse_coordinate` from any input keyword argument,
+        already supported by :meth:`~GeoParser.place` and
+        :meth:`~GeoParser.coordinate` from any input keyword argument,
         *i.e.,* :literal:`['lat', 'Lon', 'x', 'y', 'coord', 'place', 'address', 'city', 'zip', 'country']`.
         See the examples above.
 
         See also
         --------
-        :meth:`~GeoParser.parse_place`, :meth:`~GeoParser.parse_coordinate`,
-        :meth:`~GeoParser.parse_geometry`.
+        :meth:`~GeoParser.place`, :meth:`~GeoParser.coordinate`,
+        :meth:`~GeoParser.geometry`.
         """
         def __call__(self, *args, **kwargs):
             try:
-                place = _Decorator.parse_place(lambda p, **kw: p)(*args, **kwargs)
+                place = GeoParser.place(lambda p, **kw: p)(*args, **kwargs)
             except:
                 place = None
             else:
-                kwargs.update({'place': place})
+                kwargs.update({GeoParser.KW_PLACE: place})
             try:
-                coord = _Decorator.parse_coordinate(lambda c, **kw: c)(*args, **kwargs)
+                coord = GeoParser.coordinate(lambda c, **kw: c)(*args, **kwargs)
             except:
                 coord = None
             else:
-                kwargs.update({'coord': coord})
+                kwargs.update({GeoParser.KW_COORD: coord})
             try:
                 assert not(place in ('',None) and coord in ([],None))
             except:
@@ -1088,16 +1094,17 @@ class GeoParser(BaseParser):
                 try:
                     assert place in ('',None) or coord in ([],None)
                 except:
-                    raise Error('too many geographic entities parsed to define the place')
+                    raise IOError("Too many geographic entities parsed to define the place")
             return self.func(*args, **kwargs)
 
     #/************************************************************************/
-    class parse_geometry(BaseParserDecorator):
+    @class_decorator(ActivParser.inhibitorFactory, special_member=['__call__'])
+    class geometry(BaseParserDecorator):
         """Class decorator of functions and methods used to parse either :literal:`(lat,Lon)`
         coordinate(s) or (topo)name(s) from JSON-like dictionary parameters (geometry
         features) formated according to |GISCO| geometry responses (see |GISCOWIKI|).
 
-            >>> new_func = GeoParser.parse_geometry(func)
+            >>> new_func = GeoParser.geometry(func)
 
         Arguments
         ---------
@@ -1108,7 +1115,7 @@ class GeoParser(BaseParser):
         Keyword arguments
         -----------------
         method_type,obj,cls :
-            see :meth:`~GeoParser.parse_coordinate`.
+            see :meth:`~GeoParser.coordinate`.
 
         Returns
         -------
@@ -1123,26 +1130,26 @@ class GeoParser(BaseParser):
 
             >>> func = lambda *args, **kwargs: kwargs.get('geom')
             >>> geom = {'A': 1, 'B': 2}
-            >>> GeoParser.parse_geometry(func)(geom=geom)
-                Error: !!! geometry attributes not recognised !!!
+            >>> GeoParser.geometry(func)(geom=geom)
+                !!! Geometry attributes not recognised !!!
             >>> geom = {'geometry': {'coordinates': [1, 2], 'type': 'Point'},
                         'properties': {'city': 'somewhere',
                                        'country': 'some country',
                                        'street': 'sesame street',
                                        'osm_key': 'place'},
                         'type': 'Feature'}
-            >>> GeoParser.parse_geometry(func)(geom=geom)
+            >>> GeoParser.geometry(func)(geom=geom)
                 [[2, 1]]
             >>> func = lambda *args, **kwargs: kwargs.get('place')
-            >>> GeoParser.parse_geometry(func)(geom=geom, filter='place')
+            >>> GeoParser.geometry(func)(geom=geom, filter='place')
                 ['sesame street, somewhere, some country']
 
         Also note that the argument can be parsed as a positional argument (usage
         not recommended):
 
-            >>> GeoParser.parse_geometry(func)(geom)
+            >>> GeoParser.geometry(func)(geom)
                 []
-            >>> GeoParser.parse_geometry(func)(geom, order='Ll')
+            >>> GeoParser.geometry(func)(geom, order='Ll')
                 [[1, 2]]
 
         and an actual one:
@@ -1178,11 +1185,11 @@ class GeoParser(BaseParser):
                    'postcode': '10117', 'state': 'Berlin', 'street': 'Behrenstraße'},
                   'type': 'Feature'}]
 
-        We can for instance use the :meth:`parse_geometry` to parse (filter) the
+        We can for instance use the :meth:`geometry` to parse (filter) the
         data :data:`geom` and retrieve the coordinates:
 
             >>> func = lambda **kwargs: kwargs.get('coord')
-            >>> new_func = GeoParser.parse_geometry(func)
+            >>> new_func = GeoParser.geometry(func)
             >>> hasattr(new_func, '__call__')
                 True
             >>> new_func(geom=geom, filter='coord')
@@ -1193,7 +1200,7 @@ class GeoParser(BaseParser):
         One can also similarly retrieve the name of the places:
 
             >>> func = lambda **kwargs: kwargs.get('place')
-            >>> new_func = GeoParser.parse_geometry(func)
+            >>> new_func = GeoParser.geometry(func)
             >>> hasattr(new_func, '__call__')
                 True
             >>> new_func(geom=geom, filter='place')
@@ -1239,11 +1246,10 @@ class GeoParser(BaseParser):
 
         See also
         --------
-        :meth:`~GeoParser.parse_place`, :meth:`~GeoParser.parse_coordinate`,
-        :meth:`~GeoParser.parse_place_or_coordinate`, :meth:`~GeoParser.parse_nuts`,
-        :meth:`services.GISCOService.place2area`.
+        :meth:`~GeoParser.place`, :meth:`~GeoParser.coordinate`,
+        :meth:`~GeoParser.place_or_coordinate`.
         """
-        KW_LAT          = 'lat' # not to be confused with 'lat'
+        KW_LAT          = 'lat' # not to be confused with GeoParser.KW_LAT
         KW_LON          = 'lon' # ibid
         KW_FEATURES     = 'features'
         KW_GEOMETRY     = 'geometry'
@@ -1251,7 +1257,7 @@ class GeoParser(BaseParser):
         KW_TYPE         = 'type'
         KW_OSM_KEY      = 'osm_key'
         KW_COORDINATES  = 'coordinates'
-        KW_CITY         = 'city' # not to be confused with 'city'
+        KW_CITY         = 'city' # not to be confused with GeoParser.KW_CITY
         KW_COUNTRY      = 'country' # ibid
         KW_POSTCODE     = 'postcode'
         KW_STATE        = 'state'
@@ -1260,15 +1266,16 @@ class GeoParser(BaseParser):
         KW_DISPLAYNAME  = 'display_name'
         KW_NAME         = 'name'
         def __call__(self, *args, **kwargs):
-            filt = kwargs.pop('filter','coord')
-            if filt not in ('',None) and not (Type.is_string(filt) and filt in ('place','coord')):
-                raise Error('wrong "filer" parameter')
+            filt = kwargs.pop('filter',GeoParser.KW_COORD)
+            if filt not in ('',None) \
+                and not (Type.is_string(filt) and filt in (GeoParser.KW_PLACE,GeoParser.KW_COORD)):
+                raise TypeError("Wrong "filer" parameter")
             unique = kwargs.pop('unique',False)
             if not isinstance(unique, bool):
-                raise Error('wrong "unique" parameter')
+                raise TypeError("Wrong "unique" parameter")
             order = kwargs.pop('order', 'lL')
             if not Type.is_string(order) or not order in ('Ll','lL'):
-                raise Error('wrong "order" parameter')
+                raise TypeError("Wrong "order" parameter")
             geom = None
             if args not in ((None,),()):
                 __key_area = False
@@ -1276,7 +1283,7 @@ class GeoParser(BaseParser):
                     try:
                         geom = [a.geometry for a in args]
                     except:
-                        raise Error('parsed geometry feature not recognised')
+                        raise IOError("Parsed geometry feature not recognised")
                 elif all([Type.is_mapping(a) for a in args]):
                     geom = args
                 elif len(args) == 1 and Type.is_sequence(args[0]):
@@ -1284,79 +1291,80 @@ class GeoParser(BaseParser):
                         geom = args[0]
             if geom is None:
                 __key_area = True
-                geom = kwargs.pop(_Decorator.KW_GEOMETRY, None)
-            elif not kwargs.get(_Decorator.KW_GEOMETRY) is None:
-                raise Error('don''t mess up with me - duplicated geometry argument parsed')
+                geom = kwargs.pop(GeoParser.KW_GEOMETRY, None)
+            elif not kwargs.get(GeoParser.KW_GEOMETRY) is None:
+                raise IOError("Don''t mess up with me - duplicated geometry argument parsed")
             if geom is None:
                 # raise ValueError('not input geometry parsed')
                 return self.func(*args, **kwargs)
             if Type.is_mapping(geom):
                 geom = [geom,]
             elif not Type.is_sequence(geom):
-                raise Error('wrong geometry definition')
+                raise TypeError("Wrong geometry definition")
             if not all([Type.is_mapping(g) for g in geom]):
-                raise Error('wrong formatting/typing of geometry')
+                raise TypeError("Wrong formatting/typing of geometry")
             if filt in ('',None):
-                kwargs.update({_Decorator.KW_GEOMETRY: geom})
-            elif filt == 'coord':
+                kwargs.update({GeoParser.KW_GEOMETRY: geom})
+            elif filt == GeoParser.KW_COORD:
                 try: # geometry is formatted like an OSM output
-                    coord = [[float(g[_Decorator.parse_geometry.KW_LAT]),
-                              float(g[_Decorator.parse_geometry.KW_LON])] for g in geom]
+                    coord = [[float(g[GeoParser.geometry.KW_LAT]),
+                              float(g[GeoParser.geometry.KW_LON])] for g in geom]
                     assert coord not in ([],None,[None])
                 except: # geometry is formatted like a GEOJSON output
                     coord = [g for g in geom                                                    \
-                       if _Decorator.parse_geometry.KW_GEOMETRY in g                            \
-                           and _Decorator.parse_geometry.KW_PROPERTIES in g                     \
-                           and _Decorator.parse_geometry.KW_TYPE in g                           \
-                           and g[_Decorator.parse_geometry.KW_TYPE]=='Feature'                  \
+                       if GeoParser.geometry.KW_GEOMETRY in g                            \
+                           and GeoParser.geometry.KW_PROPERTIES in g                     \
+                           and GeoParser.geometry.KW_TYPE in g                           \
+                           and g[GeoParser.geometry.KW_TYPE]=='Feature'                  \
                        ]
                     _coord = [c for c in coord                                              \
-                              if (not(settings.CHECK_TYPE) or c[_Decorator.parse_geometry.KW_GEOMETRY][_Decorator.parse_geometry.KW_TYPE]=='Point')]
+                              if (not(settings.CHECK_TYPE) or c[GeoParser.geometry.KW_GEOMETRY][GeoParser.geometry.KW_TYPE]=='Point')]
                     try:    assert _coord != []
                     except: pass
                     else:
                         coord = _coord
                         _coord = [c for c in coord                                              \
-                                  if (not(settings.CHECK_OSM_KEY) or c[_Decorator.parse_geometry.KW_PROPERTIES][_Decorator.parse_geometry.KW_OSM_KEY]=='place')]
+                                  if (not(settings.CHECK_OSM_KEY) or c[GeoParser.geometry.KW_PROPERTIES][GeoParser.geometry.KW_OSM_KEY]=='place')]
                         try:    assert _coord != []
                         except: pass
                         else:   coord = _coord
                     #coord = dict(zip(['lon','lat'],                                                 \
                     #                  zip(*[c[self.KW_GEOMETRY][self.KW_COORDINATES] for c in coord])))
-                    coord = [_[_Decorator.parse_geometry.KW_GEOMETRY][_Decorator.parse_geometry.KW_COORDINATES][::-1]   \
+                    coord = [_[GeoParser.geometry.KW_GEOMETRY][GeoParser.geometry.KW_COORDINATES][::-1]   \
                              for _ in coord]
                 if __key_area and coord in ([],None):
-                    raise Error ('geometry attributes not recognised')
+                    raise IOError ("Geometry attributes not recognised")
                 if order != 'lL':   coord = [_[::-1] for _ in coord]
                 if unique:          coord = [coord[0],]
                 #elif len(coord)==1:          coord = coord[0]
-                kwargs.update({'coord': coord})
-            elif filt == 'place':
+                kwargs.update({GeoParser.KW_COORD: coord})
+            elif filt == GeoParser.KW_PLACE:
                 try: # geometry is formatted like an OSM output
-                    place = [g[_Decorator.parse_geometry.KW_DISPLAYNAME] for g in geom]
+                    place = [g[GeoParser.geometry.KW_DISPLAYNAME] for g in geom]
                     assert place not in ([],[''],None,[None])
                 except: # geometry is formatted like an OSM output
-                    place = [g.get(_Decorator.parse_geometry.KW_PROPERTIES) for g in geom \
-                             if _Decorator.parse_geometry.KW_PROPERTIES in g]
-                    place = [', '.join(filter(None, [p.get(_Decorator.parse_geometry.KW_STREET) or '',
-                                        p.get(_Decorator.parse_geometry.KW_CITY) or '',
-                                        '(' + p.get(_Decorator.parse_geometry.KW_STATE) + ')'               \
-                                            if p.get(_Decorator.parse_geometry.KW_STATE) not in (None,'')   \
-                                            and p.get(_Decorator.parse_geometry.KW_STATE)!=p.get(_Decorator.parse_geometry.KW_CITY) else '',
-                                        p.get(_Decorator.parse_geometry.KW_POSTCODE) or '',
-                                        p.get(_Decorator.parse_geometry.KW_COUNTRY) or ''])) \
-                            or p.get(_Decorator.parse_geometry.KW_NAME) or '' for p in place]
+                    place = [g.get(GeoParser.geometry.KW_PROPERTIES) for g in geom \
+                             if GeoParser.geometry.KW_PROPERTIES in g]
+                    place = [', '.join(filter(None, [p.get(GeoParser.geometry.KW_STREET) or '',
+                                        p.get(GeoParser.geometry.KW_CITY) or '',
+                                        '(' + p.get(GeoParser.geometry.KW_STATE) + ')'               \
+                                            if p.get(GeoParser.geometry.KW_STATE) not in (None,'')   \
+                                            and p.get(GeoParser.geometry.KW_STATE)!=p.get(GeoParser.geometry.KW_CITY) else '',
+                                        p.get(GeoParser.geometry.KW_POSTCODE) or '',
+                                        p.get(GeoParser.geometry.KW_COUNTRY) or ''])) \
+                            or p.get(GeoParser.geometry.KW_NAME) or '' for p in place]
                 if unique:          place = [place[0],]
                 if REDUCE_ANSWER and len(place)==1:    place=place[0]
                 kwargs.update({'place': place})
             return self.func(**kwargs)
 
     #/************************************************************************/
-    class parse_projection(BaseParserDecorator):
+    @class_decorator(ActivParser.inhibitorFactory, special_member=['__call__'])
+    class projection(BaseParserDecorator):
         """Class decorator of functions and methods used to parse a projection
         reference system.
 
-            >>> new_func = GeoParser.parse_projection(func)
+            >>> new_func = GeoParser.projection(func)
 
         Arguments
         ---------
@@ -1367,7 +1375,7 @@ class GeoParser(BaseParser):
         Keyword arguments
         -----------------
         method_type,obj,cls :
-            see :meth:`~GeoParser.parse_coordinate`.
+            see :meth:`~GeoParser.coordinate`.
 
         Returns
         -------
@@ -1385,42 +1393,41 @@ class GeoParser(BaseParser):
         by |GISCO| services:
 
             >>> func = lambda *args, **kwargs: kwargs.get('proj')
-            >>> GeoParser.parse_projection(func)(proj='dumb')
+            >>> GeoParser.projection(func)(proj='dumb')
                 !!! AssertionError: wrong value for PROJ argument - projection dumb not supported !!!
-            >>> GeoParser.parse_projection(func)(proj='WGS84')
+            >>> GeoParser.projection(func)(proj='WGS84')
                 4326
-            >>> GeoParser.parse_projection(func)(proj='EPSG3857')
+            >>> GeoParser.projection(func)(proj='EPSG3857')
                 3857
-            >>> GeoParser.parse_projection(func)(proj=3857)
+            >>> GeoParser.projection(func)(proj=3857)
                 3857
-            >>> GeoParser.parse_projection(func)(proj='LAEA')
+            >>> GeoParser.projection(func)(proj='LAEA')
                 3035
 
         Note also that the default projection can be parsed:
 
-            >>> GeoParser.parse_projection(func)()
+            >>> GeoParser.projection(func)()
                 4326
 
         See also
         --------
-        :meth:`~GeoParser.parse_coordinate`, :meth:`~GeoParser.parse_year`,
-        :meth:`~GeoParser.parse_scale`, :meth:`~GeoParser.parse_vector`,
-        :meth:`~GeoParser.parse_iformat`, :meth:`~GeoParser.parse_level`.
+        :meth:`~GeoParser.coordinate`, :meth:`~GeoParser.iformat`.
         """
         ## PROJECTION      = dict(happyType.seqflatten([[(k,v), (v,v)] for k,v in settings.GISCO_PROJECTIONS.items()]))
         def __init__(self, *args, **kwargs):
             kwargs.update({'_parse_cls_':   [int, str, list],
-                           '_key_':         _Decorator.KW_PROJECTION,
+                           '_key_':         GeoParser.KW_PROJECTION,
                            '_values_':      settings.GISCO_PROJECTIONS,
                            '_key_default_': settings.DEF_GISCO_PROJECTION})
-            super(_Decorator.parse_projection,self).__init__(*args, **kwargs)
+            super(GeoParser.projection,self).__init__(*args, **kwargs)
         #pass
 
     #/************************************************************************/
-    class parse_iformat(BaseParserDecorator):
+    @class_decorator(ActivParser.inhibitorFactory, special_member=['__call__'])
+    class iformat(BaseParserDecorator):
         """Class decorator of functions and methods used to parse a vector format.
 
-            >>> new_func = GeoParser.parse_iformat(func)
+            >>> new_func = GeoParser.iformat(func)
 
         Arguments
         ---------
@@ -1431,7 +1438,7 @@ class GeoParser(BaseParser):
         Keyword arguments
         -----------------
         method_type,obj,cls :
-            see :meth:`~GeoParser.parse_coordinate`.
+            see :meth:`~GeoParser.coordinate`.
 
         Returns
         -------
@@ -1448,527 +1455,40 @@ class GeoParser(BaseParser):
         this class:
 
             >>> func = lambda *args, **kwargs: kwargs.get('fmt')
-            >>> GeoParser.parse_iformat(func)(fmt='1)
-                !!! wrong format for FMT argument !!!
-            >>> GeoParser.parse_iformat(func)(fmt='csv')
-                Error: !!! wrong value for FMT argument - vector format 'csv' not supported !!!
-            >>> GeoParser.parse_iformat(func)(fmt='geojson')
+            >>> GeoParser.iformat(func)(fmt='1)
+                !!! Wrong format for FMT argument !!!
+            >>> GeoParser.iformat(func)(fmt='csv')
+                !!! Wrong value for FMT argument - vector format 'csv' not supported !!!
+            >>> GeoParser.iformat(func)(fmt='geojson')
                 'geojson'
-            >>> GeoParser.parse_iformat(func)(fmt='topojson')
+            >>> GeoParser.iformat(func)(fmt='topojson')
                 'json'
-            >>> GeoParser.parse_iformat(func)(fmt='shapefile')
+            >>> GeoParser.iformat(func)(fmt='shapefile')
                 'shx'
 
         A default format shall be parsed as well:
 
-            >>> GeoParser.parse_iformat(func)()
+            >>> GeoParser.iformat(func)()
                 'geojson'
 
         See also
         --------
-        :meth:`~GeoParser.parse_coordinate`, :meth:`~GeoParser.parse_year`,
-        :meth:`~GeoParser.parse_scale`, :meth:`~GeoParser.parse_vector`,
-        :meth:`~GeoParser.parse_projection`, :meth:`~GeoParser.parse_level`.
+        :meth:`~GeoParser.coordinate`, :meth:`~GeoParser.projection`.
         """
         def __init__(self, *args, **kwargs):
             _kwargs = {'shapefile': 'shx'} # we cheat...
             _kwargs.update(settings.GISCO_FORMATS.copy())
             kwargs.update({'_parse_cls_':   [str, list],
-                           '_key_':         _Decorator.KW_IFORMAT,
+                           '_key_':         GeoParser.KW_IFORMAT,
                            '_values_':      _kwargs,
                            '_key_default_': settings.DEF_GISCO_FORMAT})
-            super(_Decorator.parse_iformat,self).__init__(*args, **kwargs)
+            super(GeoParser.iformat,self).__init__(*args, **kwargs)
 
 
 #==============================================================================
-# Class GISCOParser
+# Class TextParser
 #==============================================================================
 
-class GISCOParser(GeoParser):
-
-    KW_MAP_URL                  = 'map_url'
-    KW_ARCGIS                   = 'arcgis'
-    KW_NUTS                     = 'nuts'
-
-    KW_LEVEL                    = 'level'
-    KW_SCALE                    = 'scale'
-
-    """
-
-        The use of the :data:`_force_list_` keyword argument can help reformat the
-        output default values into list(s). For instance (see :class:`GISCOParser`
-        in [:class:`happygisco`](https://github.com/eurostat/happyGISCO) package):
-
-            >>> @GISCOParser.parse_default(settings.GISCO_DATA_DIMENSIONS, _force_list_=True)
-            ... def func(*args,**kwargs):
-            ...     print(kwargs)
-            >>> func()
-                {'fmt': ['geojson'], 'level': [0], 'proj': [4326], 'scale': ['60m'], 'vector': ['RG'], 'year': [2013]}
-
-        Note in particular that, in order to retrieve, all at once, the dictionary
-        of |GISCO| default dimension parameters, one can run:
-
-            >>> defkw = GISCOParser.parse_default(settings.GISCO_DATA_DIMENSIONS)(lambda **kw: kw)
-            >>> defkw()
-                {'fmt': 'geojson', 'level': 0, 'proj': 4326, 'scale': '60m', 'vector': 'RG', 'year': 2013}
-
-    """
-
-    #/************************************************************************/
-    class parse_nuts(GeoParser.Base):
-        """Class decorator of functions and methods used to parse information content
-        from JSON-like dictionary parameters (*e.g.*, formated according to |GISCO|
-        |NUTS| responses: see |GISCOWIKI|).
-
-            >>> new_func = GISCOParser.parse_nuts(func)
-
-        Arguments
-        ---------
-        func : callable
-            the function to decorate that accepts, say, the input arguments
-            :data:`*args, **kwargs`.
-
-        Keyword arguments
-        -----------------
-        method_type : str
-            type of the method decorated; can be any string from
-            :literal:`['function', 'staticmethod', 'classmethod', 'property','instancemethod']`;
-            default is :literal:`'function'`.
-        obj :
-            instance whose method is decorated when the decorated function is an
-            :literal:`'instancemethod'`; default is :data:`None`.
-        cls : class
-            class whose method is decorated when the decorated function is any
-            among :literal:`['staticmethod', 'classmethod', 'property','instancemethod']`;
-            default is :data:`None`.
-
-        Returns
-        -------
-        new_func : callable
-            the decorated function that now accepts a JSON-like entry as a positional
-            argument (see *Notes* below).
-
-        Examples
-        --------
-        Some dummy examples:
-
-            >>> func = lambda *args, **kwargs: kwargs.get('nuts')
-            >>> nuts = {'A': 1, 'B': 2}
-            >>> GISCOParser.parse_nuts(func)(nuts)
-                []
-            >>> GISCOParser.parse_nuts(func)(nuts=nuts)
-                !!! NUTS attributes not recognised !!!
-            >>> nuts = {'attributes': {'CNTR_CODE': 'EU', 'LEVL_CODE': '0'},
-                        'NUTS_NAME': 'EU',
-                        'displayFieldName': 'NUTS_ID', 'layerId': 2, 'layerName': 'NUTS_2013',
-                        'value': 'EU'}
-            >>> [nuts] == GISCOParser.parse_nuts(func)(**nuts)
-                True
-            >>> [nuts] == GISCOParser.parse_nuts(func)(nuts=nuts)
-                True
-
-        and an even dummier one:
-
-            >>> serv = services.GISCOService()
-            >>> nuts = serv.place2nuts(place='Lisbon,Portugal')
-            >>> print(nuts)
-                [{'attributes': {'CNTR_CODE': 'PT', 'LEVL_CODE': '0',
-                   'NAME_LATN': 'PORTUGAL', 'NUTS_ID': 'PT',
-                   'NUTS_NAME': 'PORTUGAL', 'OBJECTID': '28',
-                   'SHRT_ENGL': 'Portugal'},
-                  'displayFieldName': 'NUTS_ID', 'layerId': 2, 'layerName': 'NUTS_2013',
-                  'value': 'PT'},
-                 {'attributes': {'CNTR_CODE': 'PT', 'LEVL_CODE': '1',
-                   'NAME_LATN': 'CONTINENTE', 'NUTS_ID': 'PT1',
-                   'NUTS_NAME': 'CONTINENTE', 'OBJECTID': '113',
-                   'SHRT_ENGL': 'Portugal'},
-                  'displayFieldName': 'NUTS_ID', 'layerId': 2, 'layerName': 'NUTS_2013',
-                  'value': 'PT1'},
-                 {'attributes': {'CNTR_CODE': 'PT', 'LEVL_CODE': '2',
-                   'NAME_LATN': 'Área Metropolitana de Lisboa', 'NUTS_ID': 'PT17',
-                   'NUTS_NAME': 'Área Metropolitana de Lisboa', 'OBJECTID': '376',
-                   'SHRT_ENGL': 'Portugal'},
-                  'displayFieldName': 'NUTS_ID', 'layerId': 2, 'layerName': 'NUTS_2013',
-                  'value': 'PT17'},
-                 {'attributes': {'CNTR_CODE': 'PT', 'LEVL_CODE': '3',
-                   'NAME_LATN': 'Área Metropolitana de Lisboa', 'NUTS_ID': 'PT170',
-                   'NUTS_NAME': 'Área Metropolitana de Lisboa', 'OBJECTID': '1233',
-                   'SHRT_ENGL': 'Portugal'},
-                  'displayFieldName': 'NUTS_ID', 'layerId': 2, 'layerName': 'NUTS_2013',
-                  'value': 'PT170'}]
-            >>> res = GISCOParser.parse_nuts(func)(nuts)
-            >>> all([res[i] == nuts[i] for i in range(len(res))])
-                True
-            >>> GISCOParser.parse_nuts(func)(nuts, level=2)
-                 {'attributes': {'CNTR_CODE': 'PT', 'LEVL_CODE': '2',
-                   'NAME_LATN': 'Área Metropolitana de Lisboa', 'NUTS_ID': 'PT17',
-                   'NUTS_NAME': 'Área Metropolitana de Lisboa', 'OBJECTID': '376',
-                   'SHRT_ENGL': 'Portugal'},
-                  'displayFieldName': 'NUTS_ID', 'layerId': 2, 'layerName': 'NUTS_2013',
-                  'value': 'PT17'},
-
-        Notes
-        -----
-        * When parsed to the decorated method :data:`new_func` with input arguments
-          :data:`*args, **kwargs`, the parameters :data:`kwargs` are actually filtered
-          out to extract NUTS features, say :data:`g`, that are formatted like
-          the JSON NUTS output by |GISCO| |NUTS| web-service (see method
-          :meth:`services.GISCOService.place2nuts`).
-        * Alternatively, the output decorated method :data:`new_func` can parse
-          the following keys: :literal:`['nuts', 'attributes', 'displayFieldName', 'layerId', 'layerName', 'value']`
-          from any input keyword argument. See the examples above.
-
-        See also
-        --------
-        :meth:`GeoParser.parse_geometry`, :meth:`services.GISCOService.place2area`,
-        :meth:`GeoParser.parse_coordinate`, :meth:`services.GISCOService.coord2nuts`,
-        :meth:`services.GISCOService.place2nuts`.
-        """
-        # GDAL like dictionaries
-        KW_PROPERTIES   = 'properties'
-        KW_GEOMETRY     = 'geometry'
-        KW_FEATURES     = 'features'
-        KW_TYPE         = 'type'
-        KW_CRS          = 'crs'
-        KW_NAME         = 'name'
-        KW_COORDINATES  = 'coordinates'
-        # GISCO-like dictionaries
-        KW_RESULTS      = 'results'
-        KW_ATTRIBUTES   = 'attributes'
-        KW_FIELDNAME    = 'displayFieldName'
-        KW_LAYERID      = 'layerId'
-        KW_LAYERNAME    = 'layerName'
-        KW_VALUE        = 'value'
-        KW_LEVEL        = 'LEVL_CODE'
-        KW_FID          = 'FID'
-        KW_NUTS_ID      = 'NUTS_ID'
-        KW_CNTR_CODE    = 'CNTR_CODE'
-        KW_NUTS_NAME    = 'NUTS_NAME' # or 'NAME_LATN' ?
-        KW_OBJECTID     = 'OBJECTID'
-        def __call__(self, *args, **kwargs):
-            level = kwargs.pop('level',None)
-            nuts, items = None, {}
-            if args not in (None,()):
-                __key_nuts = False
-                if all([Type.is_mapping(a) for a in args]):
-                    nuts = list(args)
-                elif len(args) == 1 and Type.is_sequence(args[0]):
-                    if all([Type.is_mapping(args[0][i]) for i in range(len(args[0]))]):
-                        nuts = args[0]
-            if nuts is None:
-                __key_nuts = True
-                nuts = kwargs.pop(GISCOParser.KW_NUTS, {})
-                items = { # GDAL like dictionaries
-                        GISCOParser.parse_nuts.KW_PROPERTIES:    kwargs.pop(GISCOParser.parse_nuts.KW_PROPERTIES, None),
-                         GISCOParser.parse_nuts.KW_GEOMETRY:     kwargs.pop(GISCOParser.parse_nuts.KW_GEOMETRY, None),
-                         GISCOParser.parse_nuts.KW_FEATURES:     kwargs.pop(GISCOParser.parse_nuts.KW_FEATURES, None),
-                         GISCOParser.parse_nuts.KW_TYPE:         kwargs.pop(GISCOParser.parse_nuts.KW_TYPE, None),
-                         GISCOParser.parse_nuts.KW_CRS:          kwargs.pop(GISCOParser.parse_nuts.KW_CRS, None),
-                         GISCOParser.parse_nuts.KW_NAME:         kwargs.pop(GISCOParser.parse_nuts.KW_NAME, None),
-                         # GISCO-like dictionaries
-                         GISCOParser.parse_nuts.KW_ATTRIBUTES:   kwargs.pop(GISCOParser.parse_nuts.KW_ATTRIBUTES, None),
-                         GISCOParser.parse_nuts.KW_FIELDNAME:    kwargs.pop(GISCOParser.parse_nuts.KW_FIELDNAME, None),
-                         GISCOParser.parse_nuts.KW_LAYERID:      kwargs.pop(GISCOParser.parse_nuts.KW_LAYERID, None),
-                         GISCOParser.parse_nuts.KW_LAYERNAME:    kwargs.pop(GISCOParser.parse_nuts.KW_LAYERNAME, None),
-                         GISCOParser.parse_nuts.KW_VALUE:        kwargs.pop(GISCOParser.parse_nuts.KW_VALUE, None),
-                         GISCOParser.parse_nuts.KW_NUTS_NAME:    kwargs.pop(GISCOParser.parse_nuts.KW_NUTS_NAME, None),
-                         GISCOParser.parse_nuts.KW_LEVEL:        kwargs.pop(GISCOParser.parse_nuts.KW_LEVEL, None),
-                         GISCOParser.parse_nuts.KW_NUTS_ID:      kwargs.pop(GISCOParser.parse_nuts.KW_NUTS_ID, None),
-                         GISCOParser.parse_nuts.KW_CNTR_CODE:    kwargs.pop(GISCOParser.parse_nuts.KW_CNTR_CODE, None),
-                         GISCOParser.parse_nuts.KW_OBJECTID:     kwargs.pop(GISCOParser.parse_nuts.KW_OBJECTID, None)}
-                # note: the following instruction raises a "unhashable type: 'dict'"
-                # TypeError
-                # items = {(k,v) for (k,v) in list(items.items()) if v is not None}
-                # using frozenset instead of list above does not solve the issue
-                items = dict([(k,v) for (k,v) in list(items.items()) if v is not None])
-            elif not kwargs.get(_Decorator.KW_NUTS) is None:
-                raise Error('don''t mess up with me - duplicated argument parsed')
-            try:
-                assert not(nuts in ({},None) and all([v in ([],None) for v in items.values()]))
-            except AssertionError:
-                # raise ValueError('no input NUTS parsed')
-                return self.func(*args, **kwargs)
-            try:
-                assert nuts in ({},None) or all([v in ([],None) for v in items.values()])
-            except AssertionError:
-                raise Error('too many input NUTS arguments')
-            else:
-                nuts = items if nuts in ({},None) else nuts
-            if nuts in ((),[],None) or                                              \
-                (Type.is_mapping(nuts) and all([n in ([],None) for n in nuts.values()])):
-                # raise Error('no NUTS parsed')
-                return self.func(*args, **kwargs)
-            if Type.is_mapping(nuts):
-                nuts = [nuts,]
-            elif not Type.is_sequence(nuts):
-                raise Error('wrong NUTS definition')
-            if all([Type.is_mapping(n) for n in nuts]):
-                try:
-                    nuts = [n for n in nuts \
-                            if _Decorator.parse_nuts.KW_ATTRIBUTES in n or _Decorator.parse_nuts.KW_PROPERTIES in n]
-                except:
-                    nuts = {}
-            if __key_nuts and nuts in ([],None):
-                raise Error('NUTS attributes not recognised')
-            if level is not None:
-                if not Type.is_sequence(level):
-                    level = [level,]
-                level = [str(l) for l in level]
-                try:
-                    nuts = [n for n in nuts                 \
-                            if n[_Decorator.parse_nuts.KW_ATTRIBUTES][_Decorator.parse_nuts.KW_LEVEL] in level]
-                except:
-                    try :
-                        nuts = [n for n in nuts             \
-                                if n[_Decorator.parse_nuts.KW_PROPERTIES][_Decorator.parse_nuts.KW_LEVEL] in level]
-                    except:
-                        nuts = {}
-            if REDUCE_ANSWER and len(nuts)==1:    nuts=nuts[0]
-            kwargs.update({_Decorator.KW_NUTS: nuts})
-            return self.func(**kwargs)
-
-    #/************************************************************************/
-    class parse_level(Parser.Base):
-        """Class decorator of functions and methods used to parse a level for |NUTS|
-        units.
-
-            >>> new_func = _Decorator.parse_level(func)
-
-        Arguments
-        ---------
-        func : callable
-            the function to decorate that accepts, say, the input arguments
-            :data:`*args, **kwargs`.
-
-        Keyword arguments
-        -----------------
-        method_type,obj,cls :
-            see :meth:`~_Decorator.parse_coordinate`.
-
-        Returns
-        -------
-        new_func : callable
-            the decorated function that now accepts  :data:`level` as a keyword
-            argument to parse a NUTS level; the supported levels are
-            :literal:`0,1,2,3`, as listed in :data:`settings.GISCO_LEVELS`.
-
-        Examples
-        --------
-        All current NUTS levels can parsed/checked using this class:
-
-            >>> func = lambda *args, **kwargs: kwargs.get('level')
-            >>> _Decorator.parse_level(func)(level='dumb')
-                Error: !!! wrong format for LEVEL argument !!!
-            >>> _Decorator.parse_level(func)(level=4)
-                Error: !!! wrong value for LEVEL argument - level 4 not supported !!!
-            >>> _Decorator.parse_level(func)(level=1)
-                1
-
-        It also supports the parsing of multiple levels:
-
-            >>> _Decorator.parse_level(func)(level=[0,1,2])
-                [0,1,2]
-
-        and forces the parsing of one default level at level:
-
-            >>> _Decorator.parse_level(func)()
-                0
-
-        See also
-        --------
-        :meth:`~geoDecorators.parse_coordinate`, :meth:`~geoDecorators.parse_year`,
-        :meth:`~geoDecorators.parse_scale`, :meth:`~geoDecorators.parse_iformat`,
-        :meth:`~geoDecorators.parse_projection`, :meth:`~geoDecorators.parse_vector`.
-        """
-        def __init__(self, *args, **kwargs):
-            kwargs.update({'_parse_cls_':   [int, str, list], # list of levels
-                           '_key_':         _Decorator.KW_LEVEL,
-                           '_values_':      settings.GISCO_LEVELS + ['ALL',],
-                           '_key_default_': settings.DEF_GISCO_LEVEL})
-            super(_Decorator.parse_level,self).__init__(*args, **kwargs)
-
-    #/************************************************************************/
-    class parse_route(Parser.Base):
-        """Class decorator of functions and methods used to parse a route.
-
-        Note
-        ----
-        ! Not yet implemented !
-        """
-        KW_CODE         = 'code'
-        KW_ROUTES       = 'routes'
-        KW_WAYPOITNS    = 'waypoints'
-        def __call__(self, *args, **kwargs):
-            pass
-
-    #/************************************************************************/
-    class parse_vector(Parser.Base):
-        """Class decorator of functions and methods used to parse a spatial typology,
-        as defined by |GISCO|.
-
-            >>> new_func = _Decorator.parse_vector(func)
-
-        Arguments
-        ---------
-        func : callable
-            the function to decorate that accepts, say, the input arguments
-            :data:`*args, **kwargs`.
-
-        Keyword arguments
-        -----------------
-        method_type,obj,cls :
-            see :meth:`~_Decorator.parse_coordinate`.
-
-        Returns
-        -------
-        new_func : callable
-            the decorated function that now accepts :data:`vector` as a keyword
-            argument to parse a feature type (*e.g.*, used when downloading |GISCO|
-            datasets); the supported vector formats (*i.e.*, parsed to :data:`vector`)
-            are :literal:`'region','label'` and :literal:`'line'` (or :literal:`'boundary'`,
-            *e.g.* those listed in :data:`settings.GISCO_VECTORS`.
-
-        Examples
-        --------
-
-            >>> func = lambda *args, **kwargs: kwargs.get('vector')
-            >>> _Decorator.parse_vector(func)(vector='1)
-                Error: !!! wrong format for GEOMETRY argument !!!
-            >>> _Decorator.parse_vector(func)(vector='polygon')
-                Error: !!! wrong value for GEOMETRY argument - geometry 'polygon' not supported !!!
-            >>> _Decorator.parse_vector(func)(vector='region')
-                'RN'
-            >>> _Decorator.parse_vector(func)(vector='line')
-                'BN'
-            >>> _Decorator.parse_vector(func)(vector='LB')
-                'LB'
-
-        See also
-        --------
-        :meth:`~geoDecorators.parse_coordinate`, :meth:`~geoDecorators.parse_year`,
-        :meth:`~geoDecorators.parse_scale`, :meth:`~geoDecorators.parse_iformat`,
-        :meth:`~geoDecorators.parse_projection`, :meth:`~geoDecorators.parse_level`.
-        """
-        def __init__(self, *args, **kwargs):
-            kwargs.update({'_parse_cls_':   [str, list],
-                           '_key_':         _Decorator.KW_VECTOR,
-                           '_values_':      settings.GISCO_VECTORS,
-                           '_key_default_': settings.DEF_GISCO_VECTOR})
-            super(_Decorator.parse_vector,self).__init__(*args, **kwargs)
-
-    #/************************************************************************/
-    class parse_scale(Parser.Base):
-        """Class decorator of functions and methods used to parse a scale resolution
-        unit, as defined by |GISCO|.
-
-            >>> new_func = _Decorator.parse_scale(func)
-
-        Arguments
-        ---------
-        func : callable
-            the function to decorate that accepts, say, the input arguments
-            :data:`*args, **kwargs`.
-
-        Keyword arguments
-        -----------------
-        method_type,obj,cls :
-            see :meth:`~_Decorator.parse_coordinate`.
-
-        Returns
-        -------
-        new_func : callable
-            the decorated function that now accepts  :data:`scale` as a keyword
-            argument to parse a scale/resolution unit (*e.g.*, used in NUTS definition);
-            the supported scale parameters are :literal:`'01m','03m','10m','20m','60m'`,
-            *e.g.* those listed in :data:`settings.GISCO_SCALES`, as well as the
-            corresponding digital units (1, 3, 10, 20 and 60 respectively).
-
-        Examples
-        --------
-        The representation scales implemented in |GISCO| vector datasets are parsed
-        thanks to this class:
-
-            >>> func = lambda *args, **kwargs: kwargs.get('scale')
-            >>> _Decorator.parse_scale(func)(scale=45)
-                Error: !!! wrong value for SCALE argument - scale resolution 45 not supported !!!
-            >>> _Decorator.parse_scale(func)(scale=1)
-                '01m'
-            >>> _Decorator.parse_scale(func)(scale='20m')
-                '20m'
-            >>> _Decorator.parse_scale(func)(scale='6')
-                '60m'
-
-        A default scale is automatically parsed:
-
-            >>> _Decorator.parse_scale(func)()
-                '01m'
-
-        See also
-        --------
-        :meth:`~geoDecorators.parse_coordinate`, :meth:`~geoDecorators.parse_year`,
-        :meth:`~geoDecorators.parse_level`, :meth:`~geoDecorators.parse_iformat`,
-        :meth:`~geoDecorators.parse_projection`, :meth:`~geoDecorators.parse_vector`.
-        """
-        def __init__(self, *args, **kwargs_):
-            kwargs_.update({'_parse_cls_':  [int, str, list],
-                           '_key_':         _Decorator.KW_SCALE,
-                           '_values_':      settings.GISCO_SCALES,
-                           '_key_default_': settings.DEF_GISCO_SCALE})
-            super(_Decorator.parse_scale,self).__init__(*args, **kwargs_)
-
-    #/************************************************************************/
-    class parse_year(Parser.Base):
-        """Class decorator of functions and methods used to parse a reference
-        year for NUTS regulation.
-
-            >>> new_func = _Decorator.parse_year(func)
-
-        Arguments
-        ---------
-        func : callable
-            the function to decorate that accepts, say, the input arguments
-            :data:`*args, **kwargs`.
-
-        Keyword arguments
-        -----------------
-        method_type,obj,cls :
-            see :meth:`~_Decorator.parse_coordinate`.
-
-        Returns
-        -------
-        new_func : callable
-            the decorated function that now accepts  :data:`year` as a keyword
-            argument to parse a reference year (*e.g.*, used in NUTS definition);
-            currently, only years :literal:`2006, 2010, 2013` and :literal:`2016`
-            are supported (though 2016 is not yet implemented in |GISCO| NUTS
-            service).
-
-        Examples
-        --------
-        This can be used to parse years of implementation of NUTS regulation:
-
-            >>> func = lambda *args, **kwargs: kwargs.get('year')
-            >>> _Decorator.parse_year(func)(year=2000)
-                Error: !!! wrong value for YEAR argument - year 2000 not supported !!!
-            >>> _Decorator.parse_year(func)(year=2010)
-                2010
-
-        Note that it forces to parse a non-empty :data:`year` parameter:
-
-            >>> _Decorator.parse_year(func)()
-                2013
-
-        See also
-        --------
-        :meth:`~geoDecorators.parse_coordinate`, :meth:`~geoDecorators.parse_scale`,
-        :meth:`~geoDecorators.parse_iformat`, :meth:`~geoDecorators.parse_vector`,
-        :meth:`~geoDecorators.parse_projection`, :meth:`~geoDecorators.parse_level`.
-        """
-        def __init__(self, *args, **kwargs):
-            kwargs.update({'_parse_cls_':   [int, list],
-                           '_key_':         _Decorator.KW_YEAR,
-                           '_values_':      settings.GISCO_YEARS,
-                           '_key_default_': settings.DEF_GISCO_YEAR})
-            super(_Decorator.parse_year, self).__init__(*args, **kwargs)
-
+class TextParser(BaseParserCollection):
+    pass
 
